@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, List
 
 import jax
@@ -11,7 +12,8 @@ import numpy as onp
 import jax.numpy as jnp
 import jax.random as rnd
 
-from load_dataset import get_iterbatch
+from load_dataset import train_test_split
+from dataset_util import iterbatches, process_dataset
 
 
 @dataclass
@@ -192,9 +194,10 @@ class GPT(eqx.Module):
         return logit
 
 
-# @eqx.filter_jit
-@eqx.filter_value_and_grad
-def loss_fn(model, x, y):
+@partial(jax.jit, static_argnums=1)
+@jax.value_and_grad
+def loss_fn(param, static, x, y):
+    model = eqx.combine(param, static)
     logit = model(x)
     B, T, V = logit.shape
 
@@ -206,32 +209,39 @@ def loss_fn(model, x, y):
 
     return loss
 
-def step(model, x, y, optim, state):
-    loss, grad = loss_fn(model, x, y)
-    updates, state = optim.update(grad, state)
-    model = eqx.apply_updates(model, updates)
     return model, state, loss
 
 def main():
-    dataloader, n_vocab, ds_size = get_iterbatch(n_ctx=64, batch_size=4)
+    n_ctx, bs = 64, 64
+    text, codebook = process_dataset('alice.txt', print_stats=False)
+    Xtr_bt, Xte_bt = train_test_split(codebook, text, n_ctx)
+    iter_batch = partial(iterbatches, batch_size=bs, include_final_partial_batch=False)
+    ds_size = Xtr_bt.shape[0] // bs
+
     cfg = GPTConfig(
         key=rnd.PRNGKey(39),
-        n_head=2, d_embd=8,
-        block_size=64, n_vocab=n_vocab, n_layer=5
+        n_head=4, d_embd=128,
+        block_size=64, n_vocab=codebook.size, n_layer=4
     )
+
     model = GPT(cfg)
     param, static = eqx.partition(model, eqx.is_array)
     optim = optax.adam(3e-4)
     state = optim.init(param)
 
-    model = eqx.combine(param, static)
-    pbar = tqdm.tqdm(dataloader, total=ds_size)
+    for epoch in range(1000):
+        dataloader = iter_batch(Xtr_bt)
+        pbar = tqdm.tqdm(dataloader, total=ds_size)
 
-    for xyb in pbar:
-        xyb = xyb[0]
-        xb, yb = xyb[:, :-1], xyb[:, 1:]
-        model, state, loss = step(model, xb, yb, optim, state)
-        pbar.set_description(f'loss: {loss:.5f}')
+        for xyb in pbar:
+            xyb = xyb[0]
+            xb, yb = xyb[:, :-1], xyb[:, 1:]
+
+            loss, grad = loss_fn(param, static, xb, yb)
+            updates, state = optim.update(grad, state)
+            param = eqx.apply_updates(param, updates)
+
+            pbar.set_description(f'Epoch {epoch} loss: {loss:.5f}')
 
 
 if __name__ == '__main__':
