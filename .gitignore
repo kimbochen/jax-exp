@@ -117,3 +117,6 @@ dmypy.json
 
 # pycharm
 .idea/
+
+# Vim
+*.swp
