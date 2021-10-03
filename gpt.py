@@ -12,8 +12,7 @@ import numpy as onp
 import jax.numpy as jnp
 import jax.random as rnd
 
-from load_dataset import train_test_split
-from dataset_util import iterbatches, process_dataset
+from data import get_data, get_dataloader
 
 
 @dataclass
@@ -212,16 +211,13 @@ def loss_fn(param, static, x, y):
     return model, state, loss
 
 def main():
-    n_ctx, bs = 64, 64
-    text, codebook = process_dataset('alice.txt', print_stats=False)
-    Xtr_bt, Xte_bt = train_test_split(codebook, text, n_ctx)
-    iter_batch = partial(iterbatches, batch_size=bs, include_final_partial_batch=False)
-    ds_size = Xtr_bt.shape[0] // bs
+    text, chars = get_data('alice.txt')
+    print(f'Data has {len(text)} characters, {len(chars)} unique.')
 
     cfg = GPTConfig(
         key=rnd.PRNGKey(39),
-        n_head=4, d_embd=128,
-        block_size=64, n_vocab=codebook.size, n_layer=4
+        n_vocab=len(chars), block_size=128,
+        n_layer=8, n_head=8, d_embd=128
     )
 
     model = GPT(cfg)
@@ -229,19 +225,37 @@ def main():
     optim = optax.adam(3e-4)
     state = optim.init(param)
 
-    for epoch in range(1000):
-        dataloader = iter_batch(Xtr_bt)
-        pbar = tqdm.tqdm(dataloader, total=ds_size)
+    max_epoch, batch_size = 100, 128
+    pbar = tqdm.trange(max_epoch)
 
-        for xyb in pbar:
-            xyb = xyb[0]
-            xb, yb = xyb[:, :-1], xyb[:, 1:]
-
+    for epoch in pbar:
+        dataloader = get_dataloader(text, chars, batch_size, cfg.block_size)
+        losses = []
+        for xb, yb in dataloader:
             loss, grad = loss_fn(param, static, xb, yb)
             updates, state = optim.update(grad, state)
             param = eqx.apply_updates(param, updates)
+            losses.append(loss)
+        pbar.set_description(f'Epoch {epoch} loss: {onp.mean(losses):.5f}')
 
-            pbar.set_description(f'Epoch {epoch} loss: {loss:.5f}')
+
+    stoi = {ch: i for i, ch in enumerate(chars)}
+    itos = {i: ch for i, ch in enumerate(chars)}
+    model = eqx.combine(param, static)
+
+    ctx = "Alice stopped in front of a "
+    x = jnp.asarray([stoi[ch] for ch in ctx]).reshape(1, -1)
+
+    for _ in tqdm.trange(50):
+        x_cond = x if x.shape[1] <= cfg.block_size else x[:, -cfg.block_size:]
+        logits = model(x_cond)
+        logits = logits[:, -1, :]
+        logprob = -jax.nn.log_softmax(logits)
+        ix = jnp.argmax(logprob)
+        x = jnp.append(x, ix).reshape(1, -1)
+
+    response = ''.join([itos[idx] for idx in x.flatten()])
+    print(response)
 
 
 if __name__ == '__main__':
