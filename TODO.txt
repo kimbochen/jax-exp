@@ -1,4 +1,0 @@
-Replace dataloader with my own implementation
-Add epoch-level progress bar
-Max out TPU memory with largest batch size
-Set up sample pipeline
