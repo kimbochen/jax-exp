@@ -212,9 +212,9 @@ def update(param, static, xb, yb, state, optim):
 
 def main():
     text, codebook = process_dataset('alice.txt', print_stats=False)
-    tconf = TrainerConfig(max_epoch=1000, batch_size=512, lr=1e-3)
+    tconf = TrainerConfig(max_epoch=1000, batch_size=64, lr=1e-3)
     mconf = GPTConfig(
-        n_head=8, d_embd=512, n_layer=8,
+        n_head=8, d_embd=256, n_layer=8,
         block_size=128, n_vocab=codebook.size
     )
 
@@ -242,7 +242,7 @@ def main():
 
 
     model = eqx.combine(param, static)
-    ctx = "Alice freezed as she heard "
+    ctx = "Alice freezed."
     x = jnp.asarray(codebook.encode(ctx)).reshape(1, -1)
 
     for _ in tqdm.trange(50):
