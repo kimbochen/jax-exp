@@ -1,5 +1,6 @@
+import re
 import joblib
-from tabulate import tabulate
+# from tabulate import tabulate
 import numpy as np
 import io
 import collections
@@ -69,3 +70,16 @@ def iterbatches(*arrays, num_batches=None, batch_size=None, shuffle=True, includ
     for batch_inds in np.array_split(inds, sections):
         if include_final_partial_batch or len(batch_inds) == batch_size:
             yield tuple(a[batch_inds] for a in arrays)
+
+
+def train_test_split(codebook, text, n_ctx):
+    # TODO start at every character
+    flatdata = np.array([codebook.token2idx(token) for token in text])
+    splits = [mo.end() for mo in re.finditer(r'\n\n|\. |; |: ',text)]
+    starts = np.concatenate([[0], splits])
+    teststart = starts[int(len(starts) * 0.75)]
+    chunksize = n_ctx + 1
+    starts_train = starts[starts + chunksize <= teststart]
+    starts_test = starts[starts + chunksize <= len(flatdata)]
+    return (np.array([flatdata[s : s+chunksize] for s in starts_train]),
+        np.array([flatdata[s : s+chunksize] for s in starts_test]))
