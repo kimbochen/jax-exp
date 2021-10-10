@@ -89,7 +89,7 @@ class LayerNorm(eqx.Module):
         return x
 
 
-class MaskedSelfAttention(eqx.Module):
+class CausalSelfAttention(eqx.Module):
     query: Linear
     key: Linear
     value: Linear
@@ -133,7 +133,7 @@ class MaskedSelfAttention(eqx.Module):
 
 class Block(eqx.Module):
     pre_ln: LayerNorm
-    attn: MaskedSelfAttention
+    attn: CausalSelfAttention
     post_ln: LayerNorm
     mlp: eqx.nn.Sequential
 
@@ -141,7 +141,7 @@ class Block(eqx.Module):
         super().__init__()
 
         self.pre_ln = LayerNorm(cfg.d_embd)
-        self.attn = MaskedSelfAttention(cfg)
+        self.attn = CausalSelfAttention(cfg)
         self.post_ln = LayerNorm(cfg.d_embd)
 
         self.mlp = Sequential([
@@ -212,20 +212,17 @@ def update(param, static, xb, yb, state, optim):
 
 def main():
     text, codebook = process_dataset('alice.txt', print_stats=False)
-    tconf = TrainerConfig(max_epoch=1000, batch_size=64, lr=1e-3)
+    tconf = TrainerConfig(max_epoch=500, batch_size=64, lr=1e-3)
     mconf = GPTConfig(
-        n_head=8, d_embd=512, n_layer=8,
+        n_head=8, d_embd=256, n_layer=8,
         block_size=128, n_vocab=codebook.size
     )
 
-    train_batch, _ = train_test_split(codebook, text, mconf.block_size)
+    train_batch, test_batch = train_test_split(codebook, text, mconf.block_size)
     iterbatch = partial(
         iterbatches, batch_size=tconf.batch_size, shuffle=False,
         include_final_partial_batch=False
     )
-
-    # batch, = next(iterbatch(train_batch))
-    # xb, yb = batch[:, :-1], batch[:, 1:]
 
     param, static = eqx.partition(GPT(mconf), eqx.is_array)
     optim = optax.adam(tconf.lr)
@@ -233,12 +230,21 @@ def main():
     pbar = tqdm.trange(tconf.max_epoch)
 
     for epoch in pbar:
-        losses = []
+        train_losses = []
         for batch, in iterbatch(train_batch):
             xb, yb = batch[:, :-1], batch[:, 1:]
             state, param, loss = update(param, static, xb, yb, state, optim)
-            losses.append(loss)
-        pbar.set_description(f'Loss: {onp.mean(losses):.5f}')
+            train_losses.append(loss)
+        train_loss = onp.mean(train_losses)
+
+        test_losses = []
+        for batch, in iterbatch(test_batch):
+            xb, yb = batch[:, :-1], batch[:, 1:]
+            loss, _ = loss_fn(param, static, xb, yb)
+            test_losses.append(loss)
+        test_loss = onp.mean(test_losses)
+
+        pbar.set_description(f'Loss: train {train_loss:.5f} / test {test_loss:.5f}')
 
 
     model = eqx.combine(param, static)
