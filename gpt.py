@@ -21,6 +21,7 @@ def get_key():
         get_key.key = rnd.PRNGKey(39)
     return get_key.key
 
+
 @dataclass
 class GPTConfig:
     n_head: int
@@ -28,9 +29,6 @@ class GPTConfig:
     n_layer: int
     block_size: int
     n_vocab: int
-    embd_pdrop: float = 0.1
-    res_pdrop: float = 0.1
-    attn_pdrop: float = 0.1
 
 @dataclass
 class TrainerConfig:
@@ -41,10 +39,6 @@ class TrainerConfig:
 
 class Sequential(eqx.Module):
     layers: List[eqx.Module]
-
-    def __init__(self, *layers):
-        super().__init__()
-        self.layers = layers
 
     def __call__(self, x):
         for layer in self.layers:
@@ -94,26 +88,11 @@ class LayerNorm(eqx.Module):
 
         return x
 
-class Dropout(eqx.Module):
-    keep: float
-    key: jnp.ndarray = eqx.static_field()
 
-    def __init__(self, keep):
-        super().__init__()
-        self.keep = keep
-        self.key = get_key()
-
-    def __call__(self, x):
-        mask = rnd.bernoulli(self.key, self.keep, x.shape)
-        x = jnp.where(mask, x, 0.0) / self.keep
-        return x
-
-class CausalSelfAttention(eqx.Module):
+class MaskedSelfAttention(eqx.Module):
     query: Linear
     key: Linear
     value: Linear
-    attn_drop: Dropout
-    res_drop: Dropout
     mask: jnp.ndarray
     project: Linear
     n_head: int
@@ -125,9 +104,6 @@ class CausalSelfAttention(eqx.Module):
         self.query = Linear(cfg.d_embd, cfg.d_embd)
         self.key = Linear(cfg.d_embd, cfg.d_embd)
         self.value = Linear(cfg.d_embd, cfg.d_embd)
-
-        self.attn_drop = Dropout(cfg.attn_pdrop)
-        self.res_drop = Dropout(cfg.res_pdrop)
 
         mask = jnp.ones([cfg.block_size, cfg.block_size]) * float('-inf')
         self.mask = jnp.triu(mask, 1).reshape(1, 1, cfg.block_size, cfg.block_size)
@@ -148,33 +124,31 @@ class CausalSelfAttention(eqx.Module):
         attn = (Q @ K.transpose(0, 1, 3, 2)) / math.sqrt(K.shape[-1])
         attn = attn * (self.mask[..., :T, :T] == 0) + self.mask[..., :T, :T]
         attn = jax.nn.softmax(attn, axis=-1)
-        attn = self.attn_drop(attn)
         y = attn @ V  # (B, n_head, T, n_token)
         y = y.transpose(0, 2, 1, 3).reshape(B, T, C)
 
-        y = self.res_drop(self.project(y))
+        y = self.project(y)
 
         return y
 
 class Block(eqx.Module):
     pre_ln: LayerNorm
-    attn: CausalSelfAttention
+    attn: MaskedSelfAttention
     post_ln: LayerNorm
-    mlp: Sequential
+    mlp: eqx.nn.Sequential
 
     def __init__(self, cfg):
         super().__init__()
 
         self.pre_ln = LayerNorm(cfg.d_embd)
-        self.attn = CausalSelfAttention(cfg)
+        self.attn = MaskedSelfAttention(cfg)
         self.post_ln = LayerNorm(cfg.d_embd)
 
-        self.mlp = Sequential(
+        self.mlp = Sequential([
             Linear(cfg.d_embd, 4 * cfg.d_embd),
             jax.nn.gelu,
-            Linear(4 * cfg.d_embd, cfg.d_embd),
-            Dropout(cfg.res_pdrop)
-        )
+            Linear(4 * cfg.d_embd, cfg.d_embd)
+        ])
 
     def __call__(self, x):
         x = x + self.attn(self.pre_ln(x))
@@ -185,8 +159,7 @@ class Block(eqx.Module):
 class GPT(eqx.Module):
     tok_embd: Embedding
     pos_embd: jnp.ndarray
-    drop: Dropout
-    blocks: Sequential
+    blocks: eqx.nn.Sequential
     norm: LayerNorm
     head: Linear
     block_size: int
@@ -196,9 +169,8 @@ class GPT(eqx.Module):
 
         self.tok_embd = Embedding(cfg.n_vocab, cfg.d_embd)
         self.pos_embd = jnp.zeros([1, cfg.block_size, cfg.d_embd])
-        self.drop = Dropout(cfg.embd_pdrop)
 
-        self.blocks = Sequential(*[Block(cfg) for _ in range(cfg.n_layer)])
+        self.blocks = Sequential([Block(cfg) for _ in range(cfg.n_layer)])
         self.norm = LayerNorm(cfg.d_embd)
         self.head = Linear(cfg.d_embd, cfg.n_vocab)
 
@@ -210,7 +182,7 @@ class GPT(eqx.Module):
 
         tok_embd = self.tok_embd(idx)    # (T, d_embd)
         pos_embd = self.pos_embd[:, :T, :]  # (T, d_embd)
-        x = self.drop(tok_embd + pos_embd)
+        x = tok_embd + pos_embd
         x = self.blocks(x)
         x = self.norm(x)
         logit = self.head(x)  # (T, n_vocab)
@@ -240,41 +212,33 @@ def update(param, static, xb, yb, state, optim):
 
 def main():
     text, codebook = process_dataset('alice.txt', print_stats=False)
-    tconf = TrainerConfig(max_epoch=500, batch_size=64, lr=1e-3)
+    tconf = TrainerConfig(max_epoch=1000, batch_size=64, lr=1e-3)
     mconf = GPTConfig(
-        n_head=8, d_embd=256, n_layer=8,
+        n_head=8, d_embd=512, n_layer=8,
         block_size=128, n_vocab=codebook.size
     )
 
-    train_batch, test_batch = train_test_split(codebook, text, mconf.block_size)
+    train_batch, _ = train_test_split(codebook, text, mconf.block_size)
     iterbatch = partial(
         iterbatches, batch_size=tconf.batch_size, shuffle=False,
         include_final_partial_batch=False
     )
 
+    # batch, = next(iterbatch(train_batch))
+    # xb, yb = batch[:, :-1], batch[:, 1:]
+
     param, static = eqx.partition(GPT(mconf), eqx.is_array)
-    dropout_tree = jax.tree_map(lambda m: type(m) == Dropout, static)
-    import pdb; pdb.set_trace()
     optim = optax.adam(tconf.lr)
     state = optim.init(param)
     pbar = tqdm.trange(tconf.max_epoch)
 
     for epoch in pbar:
-        train_losses = []
+        losses = []
         for batch, in iterbatch(train_batch):
             xb, yb = batch[:, :-1], batch[:, 1:]
             state, param, loss = update(param, static, xb, yb, state, optim)
-            train_losses.append(loss)
-        train_loss = onp.mean(train_losses)
-
-        test_losses = []
-        for batch, in iterbatch(test_batch):
-            xb, yb = batch[:, :-1], batch[:, 1:]
-            loss, _ = loss_fn(param, static, xb, yb)
-            test_losses.append(loss)
-        test_loss = onp.mean(test_losses)
-
-        pbar.set_description(f'Loss: train {train_loss:.5f} / test {test_loss:.5f}')
+            losses.append(loss)
+        pbar.set_description(f'Loss: {onp.mean(losses):.5f}')
 
 
     model = eqx.combine(param, static)
