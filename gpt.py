@@ -214,7 +214,7 @@ def main():
     text, codebook = process_dataset('alice.txt', print_stats=False)
     tconf = TrainerConfig(max_epoch=1000, batch_size=64, lr=1e-3)
     mconf = GPTConfig(
-        n_head=8, d_embd=256, n_layer=8,
+        n_head=8, d_embd=512, n_layer=8,
         block_size=128, n_vocab=codebook.size
     )
 
@@ -242,15 +242,14 @@ def main():
 
 
     model = eqx.combine(param, static)
-    ctx = "Alice freezed."
+    ctx = "Alice freezed as she heard"
     x = jnp.asarray(codebook.encode(ctx)).reshape(1, -1)
 
     for _ in tqdm.trange(50):
         x_cond = x if x.shape[1] <= mconf.block_size else x[:, -mconf.block_size:]
-        logits = model(x_cond)
-        logprob = -jax.nn.log_softmax(logits[:, -1, :], axis=-1)
-        ix = jnp.argmax(logprob)
-        x = jnp.append(x, ix).reshape(1, -1)
+        logit = model(x_cond)
+        prob = jax.nn.softmax(logit[:, -1, :], axis=-1)
+        x = jnp.append(x, jnp.argmax(prob)).reshape(1, -1)
 
     response = ''.join([codebook.idx2token(idx) for idx in x.flatten()])
     print(response)
