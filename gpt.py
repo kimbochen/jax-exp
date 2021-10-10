@@ -43,6 +43,7 @@ class Sequential(eqx.Module):
     layers: List[eqx.Module]
 
     def __init__(self, *layers):
+        super().__init__()
         self.layers = layers
 
     def __call__(self, x):
@@ -94,18 +95,17 @@ class LayerNorm(eqx.Module):
         return x
 
 class Dropout(eqx.Module):
-    p_rtn: float
-    key: jnp.ndarray
+    keep: float
+    key: jnp.ndarray = eqx.static_field()
 
-    def __init__(self, p_rtn):
+    def __init__(self, keep):
         super().__init__()
-        self.p_rtn = p_rtn
+        self.keep = keep
         self.key = get_key()
 
     def __call__(self, x):
-        mask = rnd.bernoulli(self.key, self.p_rtn, x.shape)
-        x = jnp.where(mask, x, 0.0) / self.p_rtn
-        self.key = rnd.split(self.key)[0]
+        mask = rnd.bernoulli(self.key, self.keep, x.shape)
+        x = jnp.where(mask, x, 0.0) / self.keep
         return x
 
 class CausalSelfAttention(eqx.Module):
@@ -253,6 +253,8 @@ def main():
     )
 
     param, static = eqx.partition(GPT(mconf), eqx.is_array)
+    dropout_tree = jax.tree_map(lambda m: type(m) == Dropout, static)
+    import pdb; pdb.set_trace()
     optim = optax.adam(tconf.lr)
     state = optim.init(param)
     pbar = tqdm.trange(tconf.max_epoch)
