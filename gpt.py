@@ -44,6 +44,7 @@ class Sequential(eqx.Module):
     layers: List[eqx.Module]
 
     def __init__(self, *layers):
+        super().__init__()
         self.layers = layers
 
     def __call__(self, x):
@@ -237,7 +238,7 @@ def update(param, static, xb, yb, state, optim):
 
 def main():
     text, codebook = process_dataset('alice.txt', print_stats=False)
-    tconf = TrainerConfig(max_epoch=500, batch_size=64, lr=3e-4)
+    tconf = TrainerConfig(max_epoch=500, batch_size=64, lr=1e-3)
     mconf = GPTConfig(
         n_head=8, d_embd=256, n_layer=8,
         block_size=128, n_vocab=codebook.size
