@@ -128,7 +128,7 @@ class CausalSelfAttention(eqx.Module):
         self.res_drop = Dropout(cfg.res_pdrop)
 
         mask = jnp.ones([cfg.block_size, cfg.block_size]) * float('-inf')
-        self.mask = jnp.triu(mask, 1).reshape(1, 1, cfg.block_size, cfg.block_size)
+        self.mask = jnp.triu(mask, k=1).reshape(1, 1, cfg.block_size, cfg.block_size)
 
         self.project = Linear(cfg.d_embd, cfg.d_embd)
         self.n_head = cfg.n_head
@@ -238,7 +238,7 @@ def update(param, static, xb, yb, state, optim):
 
 def main():
     text, codebook = process_dataset('alice.txt', print_stats=False)
-    tconf = TrainerConfig(max_epoch=500, batch_size=64, lr=1e-3)
+    tconf = TrainerConfig(max_epoch=300, batch_size=64, lr=3e-3)
     mconf = GPTConfig(
         n_head=8, d_embd=256, n_layer=8,
         block_size=128, n_vocab=codebook.size
@@ -268,7 +268,7 @@ def main():
     ctx = "Alice freezed as she heard"
     x = jnp.asarray(codebook.encode(ctx)).reshape(1, -1)
 
-    for _ in tqdm.trange(100):
+    for _ in tqdm.trange(200):
         x_cond = x if x.shape[1] <= mconf.block_size else x[:, -mconf.block_size:]
         logit = model(x_cond)
         prob = jax.nn.softmax(logit[:, -1, :], axis=-1)
