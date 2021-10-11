@@ -106,7 +106,7 @@ class Dropout(eqx.Module):
         return x
 
 
-class MaskedSelfAttention(eqx.Module):
+class CausalSelfAttention(eqx.Module):
     query: Linear
     key: Linear
     value: Linear
@@ -156,7 +156,7 @@ class MaskedSelfAttention(eqx.Module):
 
 class Block(eqx.Module):
     pre_ln: LayerNorm
-    attn: MaskedSelfAttention
+    attn: CausalSelfAttention
     post_ln: LayerNorm
     mlp: Sequential
 
@@ -164,7 +164,7 @@ class Block(eqx.Module):
         super().__init__()
 
         self.pre_ln = LayerNorm(cfg.d_embd)
-        self.attn = MaskedSelfAttention(cfg)
+        self.attn = CausalSelfAttention(cfg)
         self.post_ln = LayerNorm(cfg.d_embd)
 
         self.mlp = Sequential(
