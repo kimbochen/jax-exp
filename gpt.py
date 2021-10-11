@@ -237,8 +237,8 @@ def update(param, static, xb, yb, state, optim):
 
 
 def main():
-    text, codebook = process_dataset('alice.txt', print_stats=False)
-    tconf = TrainerConfig(max_epoch=300, batch_size=64, lr=3e-3)
+    text, codebook = process_dataset('input.txt', print_stats=False)
+    tconf = TrainerConfig(max_epoch=350, batch_size=256, lr=3e-3)
     mconf = GPTConfig(
         n_head=8, d_embd=256, n_layer=8,
         block_size=128, n_vocab=codebook.size
@@ -261,14 +261,15 @@ def main():
             xb, yb = batch[:, :-1], batch[:, 1:]
             state, param, loss = update(param, static, xb, yb, state, optim)
             losses.append(loss)
-        pbar.set_description(f'Train loss {onp.mean(losses):.5f}')
+        loss = onp.mean(losses)
+        pbar.set_description(f'Train loss {loss:.5f}')
 
 
     model = eqx.combine(param, static)
-    ctx = "Alice freezed as she heard"
+    ctx = "Thou shalt not fear"
     x = jnp.asarray(codebook.encode(ctx)).reshape(1, -1)
 
-    for _ in tqdm.trange(200):
+    for _ in tqdm.trange(300):
         x_cond = x if x.shape[1] <= mconf.block_size else x[:, -mconf.block_size:]
         logit = model(x_cond)
         prob = jax.nn.softmax(logit[:, -1, :], axis=-1)
