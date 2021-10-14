@@ -8,7 +8,11 @@ import jax.random as rand
 from jax.tree_util import register_pytree_node_class
 
 
+@register_pytree_node_class
 class Module:
+    def __init_subclass__(cls):
+        register_pytree_node_class(cls)
+
     def init(self, key):
         is_model = isinstance(key, int)
         key = rand.PRNGKey(key) if is_model else key
@@ -43,6 +47,7 @@ class Module:
             object.__setattr__(obj, name, value)
 
         return obj
+
 
 @register_pytree_node_class
 @dataclass

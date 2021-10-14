@@ -4,7 +4,6 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 import jax.random as rand
-from jax.tree_util import register_pytree_node_class
 
 from framework import Module, ModuleList, Param, RandParam
 
@@ -21,7 +20,6 @@ class GPTConfig:
     attn_pdrop: float = 0.1
 
 
-@register_pytree_node_class
 class Sequential(Module):
     def __init__(self, *layers):
         super().__init__()
@@ -32,7 +30,6 @@ class Sequential(Module):
             x = layer(x)
         return x
 
-@register_pytree_node_class
 class Linear(Module):
     def __init__(self, d_in, d_out):
         super().__init__()
@@ -43,7 +40,6 @@ class Linear(Module):
         y = x @ self.weight + self.bias
         return y
 
-@register_pytree_node_class
 class Embedding(Module):
     def __init__(self, n_embd, d_embd):
         super().__init__()
@@ -53,7 +49,6 @@ class Embedding(Module):
         x = self.embd[x, :]
         return x
 
-@register_pytree_node_class
 class LayerNorm(Module):
     def __init__(self, norm_shape):
         super().__init__()
@@ -70,7 +65,6 @@ class LayerNorm(Module):
 
         return x
 
-@register_pytree_node_class
 class Dropout(Module):
     def __init__(self, keep):
         super().__init__()
@@ -80,7 +74,6 @@ class Dropout(Module):
         return x
 
 
-@register_pytree_node_class
 class CausalSelfAttention(Module):
     def __init__(self, cfg):
         assert cfg.d_embd % cfg.n_head == 0
@@ -120,7 +113,6 @@ class CausalSelfAttention(Module):
 
         return y
 
-@register_pytree_node_class
 class Block(Module):
     def __init__(self, cfg):
         super().__init__()
@@ -141,7 +133,6 @@ class Block(Module):
         x = x + self.mlp(self.post_ln(x))
         return x
 
-@register_pytree_node_class
 class GPT(Module):
     def __init__(self, cfg):
         super().__init__()

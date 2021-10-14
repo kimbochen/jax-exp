@@ -18,7 +18,6 @@ class TrainerConfig:
     lr: float
 
 
-@jax.value_and_grad
 def cross_entropy(model, x, y):
     logit = model(x)
     logprob = -jax.nn.log_softmax(logit, axis=-1)
@@ -26,41 +25,12 @@ def cross_entropy(model, x, y):
     loss = logprob[jnp.arange(logprob.shape[0]), y.reshape([-1, ])].mean()
     return loss
 
-# @jax.jit
-# def step(model, xb, yb, lr):
-#     loss, grad = cross_entropy(model, xb, yb)
-#     model = jax.tree_multimap(lambda m, g: m - lr * g, model, grad)
-#     return model, loss
-
-# def train(model, train_batch, tconf, mconf):
-#     iterbatch = partial(
-#         iterbatches, batch_size=tconf.batch_size, shuffle=False,
-#         include_final_partial_batch=False
-#     )
-#     pbar = tqdm.trange(tconf.max_epoch)
-# 
-#     for epoch in pbar:
-#         losses = []
-#         for batch, in iterbatch(train_batch):
-#             xb, yb = batch[:, :-1], batch[:, 1:]
-#             model, loss = step(model, xb, yb, tconf.lr)
-#             losses.append(loss)
-#         loss = onp.mean(losses)
-#         pbar.set_description(f'Train loss {loss:.5f}')
-# 
-#     return model
-
-@partial(jax.jit, static_argnames=['get_params', 'opt_update'])
-def step(i, opt_state, get_params, opt_update, xb, yb):
-    model = get_params(opt_state)
-    loss, grad = cross_entropy(model, xb, yb)
-    opt_state = opt_update(i, grad, opt_state)
-    return loss, opt_state
-
-
 def train(model, train_batch, tconf, mconf):
-    opt_init, opt_update, get_params = opt.adam(tconf.lr)
-    opt_state = opt_init(model)
+    @jax.jit
+    def step(model, xb, yb):
+        loss, grad = jax.value_and_grad(cross_entropy)(model, xb, yb)
+        model = jax.tree_multimap(lambda m, g: m - tconf.lr * g, model, grad)
+        return model, loss
 
     iterbatch = partial(
         iterbatches, batch_size=tconf.batch_size, shuffle=False,
@@ -70,14 +40,13 @@ def train(model, train_batch, tconf, mconf):
 
     for epoch in pbar:
         losses = []
-        for idx, (batch,) in enumerate(iterbatch(train_batch)):
+        for batch, in iterbatch(train_batch):
             xb, yb = batch[:, :-1], batch[:, 1:]
-            opt_state, loss = step(idx, opt_state, get_params, opt_update, xb, yb)
+            model, loss = step(model, xb, yb)
             losses.append(loss)
-        loss = onp.mean(losses)
-        pbar.set_description(f'Train loss {loss:.5f}')
+        pbar.set_description(f'Train loss {onp.mean(losses):.5f}')
 
-    return get_params(opt_state)
+    return model
 
 def evaluate(model, ctx, mconf, codebook):
     x = jnp.asarray(codebook.encode(ctx)).reshape(1, -1)
@@ -102,7 +71,7 @@ def main():
     model, _ = GPT(mconf).init(39)
     train_batch, _ = train_test_split(codebook, text, mconf.block_size)
 
-    tconf = TrainerConfig(max_epoch=350, batch_size=256, lr=3e-3)
+    tconf = TrainerConfig(max_epoch=1000, batch_size=512, lr=3e-3)
     model = train(model, train_batch, tconf, mconf)
 
     ctx = "Thou shalt not fear"
