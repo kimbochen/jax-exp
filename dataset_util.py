@@ -59,7 +59,7 @@ def process_dataset(text_file, print_stats=True):
         ]))
     return text, codebook
 
-def iterbatches(*arrays, num_batches=None, batch_size=None, shuffle=True, include_final_partial_batch=True):
+def iterbatches(*arrays, num_batches=None, batch_size=None, shuffle=False, include_final_partial_batch=False):
     assert (num_batches is None) != (batch_size is None), 'Provide num_batches or batch_size, but not both'
     arrays = tuple(map(np.asarray, arrays))
     n = arrays[0].shape[0]

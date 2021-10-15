@@ -11,12 +11,47 @@ import jax.experimental.optimizers as opt
 from dataset_util import iterbatches, process_dataset, train_test_split
 from model import GPT, GPTConfig
 
+
 @dataclass
 class TrainerConfig:
     max_epoch: int
     batch_size: int
     lr: float
+    b1: float = 0.9
+    b2: float = 0.99
+    eps: float = 1e-8
 
+
+def Adam(tconf):
+    def init_fn(model):
+        create_state = lambda x: (x, jnp.zeros_like(x), jnp.zeros_like(x))
+        state = jax.tree_map(create_state, model)
+        return state
+
+    def get_param(state, idx):
+        get_elem = lambda x: x[idx]
+        is_tuple = lambda x: isinstance(x, tuple)
+        return jax.tree_map(get_elem, state, is_leaf=is_tuple)
+
+    def update_fn(idx, state, grad):
+        def adam_i(model, grad, mu, var, i):
+            mu = (1.0 - tconf.b1) * grad + tconf.b1 * mu
+            m_hat = mu / (1.0 - jnp.asarray(tconf.b1, mu.dtype) ** i)
+
+            var = (1.0 - tconf.b2) * jnp.square(grad) + tconf.b2 * var
+            v_hat = var / (1.0 - jnp.asarray(tconf.b2, var.dtype) ** i)
+
+            model = model - tconf.lr * m_hat / (jnp.sqrt(v_hat) + tconf.eps)
+
+            return model, mu, var
+
+        adam = partial(adam_i, i=idx)
+        model, mu, var = [get_param(state, i) for i in range(3)]
+        state = jax.tree_map(adam, model, grad, mu, var)
+
+        return state
+
+    return init_fn, update_fn, get_param
 
 def cross_entropy(model, x, y):
     logit = model(x)
@@ -25,26 +60,30 @@ def cross_entropy(model, x, y):
     loss = logprob[jnp.arange(logprob.shape[0]), y.reshape([-1, ])].mean()
     return loss
 
-def train(model, train_batch, tconf, mconf):
-    @jax.jit
-    def step(model, xb, yb):
-        loss, grad = jax.value_and_grad(cross_entropy)(model, xb, yb)
-        model = jax.tree_multimap(lambda m, g: m - tconf.lr * g, model, grad)
-        return model, loss
 
-    iterbatch = partial(
-        iterbatches, batch_size=tconf.batch_size, shuffle=False,
-        include_final_partial_batch=False
-    )
+def train(model, train_batch, tconf, mconf):
+    opt_init, opt_update, get_param = Adam(tconf)
+    state = opt_init(model)
+
+    iterbatch = partial(iterbatches, batch_size=tconf.batch_size)
     pbar = tqdm.trange(tconf.max_epoch)
+
+    @jax.jit
+    def step(idx, state, xb, yb):
+        model = get_param(state, 0)
+        loss, grad = jax.value_and_grad(cross_entropy)(model, xb, yb)
+        state = opt_update(idx, state, grad)
+        return state, loss
 
     for epoch in pbar:
         losses = []
-        for batch, in iterbatch(train_batch):
+        for i, (batch,) in enumerate(iterbatch(train_batch), start=1):
             xb, yb = batch[:, :-1], batch[:, 1:]
-            model, loss = step(model, xb, yb)
+            state, loss = step(i, state, xb, yb)
             losses.append(loss)
         pbar.set_description(f'Train loss {onp.mean(losses):.5f}')
+
+    model = get_param(state, 0)
 
     return model
 
@@ -71,7 +110,7 @@ def main():
     model, _ = GPT(mconf).init(39)
     train_batch, _ = train_test_split(codebook, text, mconf.block_size)
 
-    tconf = TrainerConfig(max_epoch=1000, batch_size=512, lr=3e-3)
+    tconf = TrainerConfig(max_epoch=500, batch_size=512, lr=1e-3)
     model = train(model, train_batch, tconf, mconf)
 
     ctx = "Thou shalt not fear"
