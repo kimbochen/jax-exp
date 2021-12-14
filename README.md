@@ -6,10 +6,10 @@ written in JAX.
 
 - [Usage](#usage)
 - [Model](#model)
-- [Data](#data)
+- [Data Pipeline](#data)
 - [Training Pipeline](#training-pipeline)
-  - [`step`](#step)
   - [`train`](#train)
+  - [`step`](#step)
   - [`adam_i`](#adam_i)
 
 ## Usage
@@ -17,19 +17,19 @@ written in JAX.
 ### Setup
 
 Create a virtual environment using Conda:
-```bash=
+```bash
 conda env create -f environment.yml
 ```
 
 ### Training
 
-```bash=
+```bash
 python train.py
 ```
 
 ### Evaluating
 
-```bash=
+```bash
 python evaluate.py --prompt <PROMPT>
 ```
 
@@ -70,7 +70,7 @@ Output: A trained model.
 
 ### `step`
 
-One optimization step, including:
+Performs one optimization step, including:
 
 - A forward pass.
 - Calculating the loss and the gradients.
@@ -89,7 +89,7 @@ Output:
 
 ### `adam_i`
 
-Performs the Adaptive Momentum optimization procedure on the model.
+Optimizes the model using according to the Adaptive Momentum (Adam) optimizer.
 
 Function signature: `adam_i(param, mu, var, i)`
 
@@ -102,7 +102,7 @@ Usage:
 
 - This function will be wrapped by `partial`, specifying keyword `i` and becoming `adam`.
 - `adam` is used with `jax.tree_map` to update `model`.
-  ```python=
+  ```python
   model = jax.tree_map(adam, model, mu, var)
   ```
 - This function will be defined in `train`, eliminating the need to pass `tconf` in the arguments.
