@@ -20,84 +20,23 @@ class GPTConfig:
     attn_pdrop: float = 0.1
 
 
-# Basic Modules
-
-class Sequential(nn.Module):
-    def __init__(self, *layers):
-        self.layers = layers
-        super().__init__()
-
-    def __call__(self, x):
-        for layer in self.layers:
-            x = layer(x)
-        return x
-
-class Linear(nn.Module):
-    def __init__(self, d_in, d_out):
-        self.weight = nn.Parameter([d_in, d_out])
-        self.bias = Parameter([d_out,], jnp.zeros)
-        super().__init__()
-
-    def __call__(self, x):
-        y = x @ self.weight + self.bias
-        return y
-
-class Embedding(nn.Module):
-    def __init__(self, n_embd, d_embd):
-        self.embd = nn.Parameter([n_embd, d_embd])
-        super().__init__()
-
-    def __call__(self, x):
-        x = self.embd[x, :]
-        return x
-
-class LayerNorm(nn.Module):
-    def __init__(self, norm_shape):
-        self.gamma = Parameter(norm_shape, jnp.ones)
-        self.beta = Parameter(norm_shape, jnp.zeros)
-        self.eps = 1e-5
-        super().__init__()
-
-    def __call__(self, x):
-        u = jnp.mean(x, axis=-1, keepdims=True)
-        var = jnp.var(x, axis=-1, keepdims=True)
-
-        x = (x - u) / jnp.sqrt(var + self.eps)
-        x = x * self.gamma + self.beta
-
-        return x
-
-class Dropout(nn.Module):
-    def __init__(self, keep_rate):
-        '''
-        Dropout explained: https://stats.stackexchange.com/questions/205932
-        '''
-        self.p = keep_rate
-        super().__init__()
-
-    def __call__(self, x, state=None):
-        # mask = rand.bernoulli(state, self.p, x.shape)
-        # x = np.where(mask, x / self.p, 0.0)
-        return x
-
-
 # Transformer Blocks
 
 class CausalSelfAttention(nn.Module):
     def __init__(self, cfg):
         assert cfg.d_embd % cfg.n_head == 0
 
-        self.query = Linear(cfg.d_embd, cfg.d_embd)
-        self.key = Linear(cfg.d_embd, cfg.d_embd)
-        self.value = Linear(cfg.d_embd, cfg.d_embd)
+        self.query = nn.Linear(cfg.d_embd, cfg.d_embd)
+        self.key = nn.Linear(cfg.d_embd, cfg.d_embd)
+        self.value = nn.Linear(cfg.d_embd, cfg.d_embd)
 
-        self.attn_drop = Dropout(cfg.attn_pdrop)
-        self.res_drop = Dropout(cfg.res_pdrop)
+        self.attn_drop = nn.Dropout(cfg.attn_pdrop)
+        self.res_drop = nn.Dropout(cfg.res_pdrop)
 
         mask = jnp.ones([cfg.block_size, cfg.block_size]) * float('-inf')
         self.mask = jnp.triu(mask, k=1).reshape(1, 1, cfg.block_size, cfg.block_size)
 
-        self.project = Linear(cfg.d_embd, cfg.d_embd)
+        self.project = nn.Linear(cfg.d_embd, cfg.d_embd)
         self.n_head = cfg.n_head
 
         super().__init__()
@@ -125,15 +64,15 @@ class CausalSelfAttention(nn.Module):
 
 class Block(nn.Module):
     def __init__(self, cfg):
-        self.pre_ln = LayerNorm(cfg.d_embd)
+        self.pre_ln = nn.LayerNorm(cfg.d_embd)
         self.attn = CausalSelfAttention(cfg)
-        self.post_ln = LayerNorm(cfg.d_embd)
+        self.post_ln = nn.LayerNorm(cfg.d_embd)
 
-        self.mlp = Sequential(
-            Linear(cfg.d_embd, 4 * cfg.d_embd),
-            jax.nn.gelu,
-            Linear(4 * cfg.d_embd, cfg.d_embd),
-            Dropout(cfg.res_pdrop)
+        self.mlp = nn.Sequential(
+            nn.Linear(cfg.d_embd, 4 * cfg.d_embd),
+            nn.GeLU(),
+            nn.Linear(4 * cfg.d_embd, cfg.d_embd),
+            nn.Dropout(cfg.res_pdrop)
         )
 
         super().__init__()
@@ -148,13 +87,13 @@ class Block(nn.Module):
 
 class GPT(nn.Module):
     def __init__(self, cfg):
-        self.tok_embd = Embedding(cfg.n_vocab, cfg.d_embd)
-        self.pos_embd = Parameter([1, cfg.block_size, cfg.d_embd], jnp.zeros)
-        self.drop = Dropout(cfg.embd_pdrop)
+        self.tok_embd = nn.Embedding(cfg.n_vocab, cfg.d_embd)
+        self.pos_embd = nn.Parameter([1, cfg.block_size, cfg.d_embd], jnp.zeros)
+        self.drop = nn.Dropout(cfg.embd_pdrop)
 
-        self.blocks = Sequential(*[Block(cfg) for _ in range(cfg.n_layer)])
-        self.norm = LayerNorm(cfg.d_embd)
-        self.head = Linear(cfg.d_embd, cfg.n_vocab)
+        self.blocks = nn.Sequential(*[Block(cfg) for _ in range(cfg.n_layer)])
+        self.norm = nn.LayerNorm(cfg.d_embd)
+        self.head = nn.Linear(cfg.d_embd, cfg.n_vocab)
 
         self.block_size = cfg.block_size
 
