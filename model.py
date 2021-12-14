@@ -22,7 +22,7 @@ class GPTConfig:
 
 # Basic Modules
 
-class Sequential(Module):
+class Sequential(nn.Module):
     def __init__(self, *layers):
         self.layers = layers
         super().__init__()
@@ -32,7 +32,7 @@ class Sequential(Module):
             x = layer(x)
         return x
 
-class Linear(Module):
+class Linear(nn.Module):
     def __init__(self, d_in, d_out):
         self.weight = nn.Parameter([d_in, d_out])
         self.bias = Parameter([d_out,], jnp.zeros)
@@ -42,7 +42,7 @@ class Linear(Module):
         y = x @ self.weight + self.bias
         return y
 
-class Embedding(Module):
+class Embedding(nn.Module):
     def __init__(self, n_embd, d_embd):
         self.embd = nn.Parameter([n_embd, d_embd])
         super().__init__()
@@ -51,7 +51,7 @@ class Embedding(Module):
         x = self.embd[x, :]
         return x
 
-class LayerNorm(Module):
+class LayerNorm(nn.Module):
     def __init__(self, norm_shape):
         self.gamma = Parameter(norm_shape, jnp.ones)
         self.beta = Parameter(norm_shape, jnp.zeros)
@@ -67,7 +67,7 @@ class LayerNorm(Module):
 
         return x
 
-class Dropout(Module):
+class Dropout(nn.Module):
     def __init__(self, keep_rate):
         '''
         Dropout explained: https://stats.stackexchange.com/questions/205932
@@ -83,7 +83,7 @@ class Dropout(Module):
 
 # Transformer Blocks
 
-class CausalSelfAttention(Module):
+class CausalSelfAttention(nn.Module):
     def __init__(self, cfg):
         assert cfg.d_embd % cfg.n_head == 0
 
@@ -123,7 +123,7 @@ class CausalSelfAttention(Module):
 
         return y
 
-class Block(Module):
+class Block(nn.Module):
     def __init__(self, cfg):
         self.pre_ln = LayerNorm(cfg.d_embd)
         self.attn = CausalSelfAttention(cfg)
@@ -146,7 +146,7 @@ class Block(Module):
 
 # Model
 
-class GPT(Module):
+class GPT(nn.Module):
     def __init__(self, cfg):
         self.tok_embd = Embedding(cfg.n_vocab, cfg.d_embd)
         self.pos_embd = Parameter([1, cfg.block_size, cfg.d_embd], jnp.zeros)
