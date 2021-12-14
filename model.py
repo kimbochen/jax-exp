@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import jax.random as rand
 
-from framework import Module, ModuleList, Param, RandParam
+import nn
 
 
 @dataclass
@@ -20,10 +20,12 @@ class GPTConfig:
     attn_pdrop: float = 0.1
 
 
+# Basic Modules
+
 class Sequential(Module):
     def __init__(self, *layers):
+        self.layers = layers
         super().__init__()
-        self.layers = ModuleList(layers)
 
     def __call__(self, x):
         for layer in self.layers:
@@ -32,9 +34,9 @@ class Sequential(Module):
 
 class Linear(Module):
     def __init__(self, d_in, d_out):
+        self.weight = nn.Parameter([d_in, d_out])
+        self.bias = Parameter([d_out,], jnp.zeros)
         super().__init__()
-        self.weight = RandParam([d_in, d_out])
-        self.bias = Param(jnp.zeros([d_out, ]))
 
     def __call__(self, x):
         y = x @ self.weight + self.bias
@@ -42,8 +44,8 @@ class Linear(Module):
 
 class Embedding(Module):
     def __init__(self, n_embd, d_embd):
+        self.embd = nn.Parameter([n_embd, d_embd])
         super().__init__()
-        self.embd = RandParam([n_embd, d_embd])
 
     def __call__(self, x):
         x = self.embd[x, :]
@@ -51,10 +53,10 @@ class Embedding(Module):
 
 class LayerNorm(Module):
     def __init__(self, norm_shape):
-        super().__init__()
-        self.gamma = Param(jnp.ones(norm_shape, 'f'))
-        self.beta = Param(jnp.zeros(norm_shape, 'f'))
+        self.gamma = Parameter(norm_shape, jnp.ones)
+        self.beta = Parameter(norm_shape, jnp.zeros)
         self.eps = 1e-5
+        super().__init__()
 
     def __call__(self, x):
         u = jnp.mean(x, axis=-1, keepdims=True)
@@ -66,18 +68,24 @@ class LayerNorm(Module):
         return x
 
 class Dropout(Module):
-    def __init__(self, keep):
+    def __init__(self, keep_rate):
+        '''
+        Dropout explained: https://stats.stackexchange.com/questions/205932
+        '''
+        self.p = keep_rate
         super().__init__()
-        self.keep = keep
 
-    def __call__(self, x):
+    def __call__(self, x, state=None):
+        # mask = rand.bernoulli(state, self.p, x.shape)
+        # x = np.where(mask, x / self.p, 0.0)
         return x
 
+
+# Transformer Blocks
 
 class CausalSelfAttention(Module):
     def __init__(self, cfg):
         assert cfg.d_embd % cfg.n_head == 0
-        super().__init__()
 
         self.query = Linear(cfg.d_embd, cfg.d_embd)
         self.key = Linear(cfg.d_embd, cfg.d_embd)
@@ -91,6 +99,8 @@ class CausalSelfAttention(Module):
 
         self.project = Linear(cfg.d_embd, cfg.d_embd)
         self.n_head = cfg.n_head
+
+        super().__init__()
 
     def __call__(self, x):
         B, T, C = x.shape
@@ -115,8 +125,6 @@ class CausalSelfAttention(Module):
 
 class Block(Module):
     def __init__(self, cfg):
-        super().__init__()
-
         self.pre_ln = LayerNorm(cfg.d_embd)
         self.attn = CausalSelfAttention(cfg)
         self.post_ln = LayerNorm(cfg.d_embd)
@@ -128,17 +136,20 @@ class Block(Module):
             Dropout(cfg.res_pdrop)
         )
 
+        super().__init__()
+
     def __call__(self, x):
         x = x + self.attn(self.pre_ln(x))
         x = x + self.mlp(self.post_ln(x))
         return x
 
+
+# Model
+
 class GPT(Module):
     def __init__(self, cfg):
-        super().__init__()
-
         self.tok_embd = Embedding(cfg.n_vocab, cfg.d_embd)
-        self.pos_embd = Param(jnp.zeros([1, cfg.block_size, cfg.d_embd]))
+        self.pos_embd = Parameter([1, cfg.block_size, cfg.d_embd], jnp.zeros)
         self.drop = Dropout(cfg.embd_pdrop)
 
         self.blocks = Sequential(*[Block(cfg) for _ in range(cfg.n_layer)])
@@ -146,6 +157,8 @@ class GPT(Module):
         self.head = Linear(cfg.d_embd, cfg.n_vocab)
 
         self.block_size = cfg.block_size
+
+        super().__init__()
 
     def __call__(self, idx):
         T = idx.shape[-1]
