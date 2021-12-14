@@ -1,1 +1,1 @@
-# Simple Neural Network Libray Design
+# Design of the Neural Network Library
