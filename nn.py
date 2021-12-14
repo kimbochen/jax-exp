@@ -2,6 +2,7 @@ import typing as tp
 from dataclasses import dataclass
 
 import jax
+import jax.numpy as jnp
 import jax.random as rand
 from jax.tree_util import register_pytree_node_class
 
@@ -18,7 +19,7 @@ class Parameter:
         if self.method is None:
             return rand.normal(key, self.shape)
         else:
-            return self.method(self.shape)
+            return self.method(self.shape, dtype=jnp.float32)
 
 
 @register_pytree_node_class
