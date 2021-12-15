@@ -70,8 +70,8 @@ by assigning the attributes according to the lists of names.
 
 How do we collect the list of leaf names?  
 After a module is instantiated, we iterate over its list of attributes (`self.__dict__`).  
-If an attribute is of type `Module` or a trainable parameter, put its name into the list of leaf names.
-Otherwise, put its name into the list of static names.
+If an attribute is of type `Module` or a trainable parameter, we put its name into the list of leaf names.
+Otherwise, we put its name into the list of static names.
 
 However, attributes are sometimes nested, e.g. a list of Transformer blocks.
 Therefore, we need to break down the attribute object into a list of objects.
@@ -80,4 +80,88 @@ assuming the list would contain elements of the same data type.
 `jax.tree_flatten` breaks down PyTrees recursively, so we specify `is_leaf`,
 telling the function to treat `Modules` and trainable parameter types as end leaves and stop.
 
-## Initializing Parameters
+## Initializing Random Parameters
+
+Neural network parameters need to be initialized explicitly or randomly.  
+In PyTorch, random states are implicitly defined,
+so users do not need to worry about random states when calling functions that generate random numbers.  
+However, random states are passed into functions explicitly in JAX.
+Thus, we need a way to assign every parameter with a unique random state.  
+
+### `Parameter` class
+
+We provide a `Parameter` class to record all arguments for creating an array and defer the array creation.
+Specifically, `Parameter` records 2 arguments:
+- `shape`: The shape of ~~you~~ the array.
+- `method`: The function that creates the array, which defaults to `jax.random.normal`.
+
+### Initializing the parameters
+
+Once a neural network is instantiated, we call `jax.treeflatten` to flatten_ the neural network.
+By the design of the `Module` class, tree leaves would only contain `Parameter` objects.  
+Given the list of _n_ `Parameter` objects, we can split a master key into _n_ subkeys with `jax.random.split`.
+We can then pair up each `Parameter` object with one subkey to initialize an array.  
+Finally, we reconstruct (unflatten) the neural network using `treedef` and the list of arrays.
+
+## Stochastic Modules
+
+Stochastic modules refer to modules whose outputs are dependent on a random state, e.g. Dropout.  
+In JAX, functions have to be free of side effects in order to be JIT compiled.
+This prohibits stochastic modules from keeping an attribute of a random state,
+because **updating the state is considered modifying the module object, which violates the rule**.  
+
+Unfortunately, I do not have time to find the solution to this problem, so here are some failed attempts:
+
+### Create a new module with all the old attributes but a different random state
+
+The JAX tracer still considers it as a side effect and raises an error.  
+This makes me wonder why updating weights and reassinging variables are valid.  
+**What is the criteria of being a tracer leak? How much change or what data types would be valid?**
+
+### Making the random state a leaf node
+
+`jax.grad` complains because random states are of type `uint32`.
+
+### Updating the state outside of the JIT-compiled function
+
+JAX raises XLA-related errors.
+
+I ran out of ideas, so I chose the most unpleasant solution: passing random states into the model
+with the input.
+
+## Activation Modules
+
+JAX provides common activation functions in `jax.nn`.  
+By wrapping activation functions in `Module` classes, users can mix activation modules with other modules
+in arbitrary containers (e.g. a list of layers).
+
+Consider this example:
+```python
+class MLP(Module):
+    def __init__(self):
+        self.layers = [
+            Linear(...),
+            jax.nn.relu,
+            Linear(...),
+            jax.nn.relu
+        ]
+```
+By the design of the `Module` class, `self.layers` would be broken down into a list of
+objects with different types, violating our assumption (See [here](#collecting-the-list-of-attribute-names)).  
+Thus, we wrap `jax.nn.relu` in a `Module` class:
+```python
+class ReLU(Module):
+    def __call__(self, x):
+        return jax.nn.relu(x)
+```
+
+## Helper Modules
+
+Helper modules are refactored out of `model.py` to reduce the model complexity and mimic the PyTorch API.  
+Here is the list of helper modules implemented:
+- `Sequential`
+- `Linear`
+- `Embedding`
+- `LayerNorm`
+- `Dropout`
+- `GeLU`
