@@ -7,11 +7,9 @@ import joblib
 import numpy as np
 
 
-class TrainDataloader:
-    def __init__(self, filename, block_size, batch_size):
-        text, self._codebook = process_dataset(filename, print_stats=False)
-        train_batch, _ = train_test_split(self.codebook, text, block_size)
-        self.iterbatch = iterbatches(train_batch, batch_size=batch_size)
+class Dataloader:
+    def __init__(self, train_ds, batch_size):
+        self.iterbatch = iterbatches(train_ds, batch_size=batch_size)
 
     def __iter__(self):
         for (batch,) in self.iterbatch:
@@ -22,10 +20,6 @@ class TrainDataloader:
         (batch,) = next(self.iterbatch)
         xb, yb = batch[:, :-1], batch[:, 1:]
         return xb, yb
-
-    @property
-    def codebook(self):
-        return self._codebook
 
 
 class Codebook(object):
@@ -106,16 +100,3 @@ def train_test_split(codebook, text, n_ctx):
     starts_test = starts[starts + chunksize <= len(flatdata)]
     return (np.array([flatdata[s : s+chunksize] for s in starts_train]),
         np.array([flatdata[s : s+chunksize] for s in starts_test]))
-
-
-if __name__ == '__main__':
-    train_dl = TrainDataloader('data/input.txt', block_size=128, batch_size=2)
-    for xb, yb in train_dl:
-        print(xb, yb, sep='\n\n')
-        break
-
-    print('-' * 39)
-
-    train_dl = TrainDataloader('data/input.txt', block_size=128, batch_size=2)
-    xb, by = next(train_dl)
-    print(xb, yb, sep='\n\n')
