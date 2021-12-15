@@ -6,7 +6,7 @@ written in JAX.
 
 - [Setup and Usage](#setup-and-usage)
 - [Model](#model)
-- [Data Pipeline](#data)
+- [Data Pipeline](#data-pipeline)
 - [Training Pipeline](#training-pipeline)
   - [`train`](#train)
   - [`step`](#step)
