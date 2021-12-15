@@ -4,14 +4,6 @@ This repository aims to be a non-trivial example of implementing a deep learning
 It contains the training code of a small GPT model, which is implemented using a minimal neural network library
 written in JAX.
 
-- [Setup and Usage](#setup-and-usage)
-- [Model](#model)
-- [Data Pipeline](#data-pipeline)
-- [Training Pipeline](#training-pipeline)
-  - [`train`](#train)
-  - [`step`](#step)
-  - [`adam_i`](#adam_i)
-
 ## Setup and Usage
 
 Replicate the virtual environment using Conda:
@@ -34,7 +26,7 @@ python evaluate.py --prompt <INPUT_PROMPT>
 The model is defined in `model.py`.  
 The model implementation is based on Andrej Karpathy's [minGPT](https://github.com/karpathy/minGPT), including:
 - High-level modules: `GPT`, `Block`(Transformer), and `CausalSelfAttention`(self-attention).
-- Helper modules: Modules originally provided by PyTorch, here implemented in the Python module `nn`.
+- Helper modules: Modules originally provided by PyTorch, here implemented in the Python module `nn`.  
   See `nn` for the full details.
 - `GPTConfig`: A class that collects the configurations of the model.
 
