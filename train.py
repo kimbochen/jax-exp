@@ -1,10 +1,12 @@
+import pickle
 from dataclasses import dataclass
 
 import jax
 import jax.random as rand
 
-from dataset_util import iterbatches, process_dataset, train_test_split
+from dataset_util import Dataloader, process_dataset, train_test_split
 from model import GPT, GPTConfig
+
 
 @dataclass
 class TrainerConfig:
@@ -30,11 +32,16 @@ def cross_entropy(model, x, y):
     loss = logprob[jnp.arange(logprob.shape[0]), y.reshape([-1, ])].mean()
     return loss
 
-def train_one_batch(model, train_ds, mconf, tconf):
+
+def train(model, train_dl, tconf):
     pass
 
 
+
+
+
 def test():
+    tconf = TrainerConfig(max_epoch=500, batch_size=512, lr=1e-3)
     text, codebook = process_dataset('data/input.txt', print_stats=False)
 
     mconf = GPTConfig(
@@ -42,10 +49,14 @@ def test():
         block_size=128, n_vocab=codebook.size
     )
     model = init_model(GPT(mconf), 39)
-    train_ds, _ = train_test_split(codebook, text, mconf.block_size)
 
-    tconf = TrainerConfig(max_epoch=500, batch_size=512, lr=1e-3)
-    train_one_batch(model, train_ds, mconf, tconf)
+    train_ds, _ = train_test_split(codebook, text, mconf.block_size)
+    train_dl = Dataloader(train_ds, tconf.batch_size)
+
+    model = train(model, train_dl, tconf)
+
+    with open('ckpt_model.pkl', 'wb') as pkl_file:
+        pickle.dump(model, pkl_file)
 
 if __name__ == '__main__':
     test()
