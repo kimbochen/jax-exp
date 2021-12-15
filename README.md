@@ -4,7 +4,7 @@ This repository aims to be a non-trivial example of implementing a deep learning
 It contains the training code of a small GPT model, which is implemented using a minimal neural network library
 written in JAX.
 
-- [Usage](#usage)
+- [Setup and Usage](#setup-and-usage)
 - [Model](#model)
 - [Data Pipeline](#data)
 - [Training Pipeline](#training-pipeline)
@@ -12,34 +12,27 @@ written in JAX.
   - [`step`](#step)
   - [`adam_i`](#adam_i)
 
-## Usage
+## Setup and Usage
 
-### Setup
-
-Create a virtual environment using Conda:
+Replicate the virtual environment using Conda:
 ```bash
 conda env create -f environment.yml
 ```
 
-### Training
-
+To train the model:
 ```bash
 python train.py
 ```
 
-### Evaluating
-
+To test out the model:
 ```bash
-python evaluate.py --prompt <PROMPT>
+python evaluate.py --prompt <INPUT_PROMPT>
 ```
-
-`--prompt`: The input prompt given to the model.
 
 ## Model
 
 The model is defined in `model.py`.  
-The model implementation is largely based on Andrej Karpathy's [minGPT](https://github.com/karpathy/minGPT),
-including:
+The model implementation is based on Andrej Karpathy's [minGPT](https://github.com/karpathy/minGPT), including:
 - High-level modules: `GPT`, `Block`(Transformer), and `CausalSelfAttention`(self-attention).
 - Helper modules: Modules originally provided by PyTorch, here implemented in the Python module `nn`.
   See `nn` for the full details.
@@ -47,9 +40,9 @@ including:
 
 ## Data Pipeline
 
-The data pipeline is largely based on Shawn Presser's [jax-exp](https://github.com/shawwn/jax-exp).  
+The data pipeline is based on Shawn Presser's [jax-exp](https://github.com/shawwn/jax-exp).  
 My future plan is to implement a dataloader object based on
-[JaxNeRF](https://github.com/google-research/google-research/blob/master/jaxnerf/nerf/datasets.py)
+[JaxNeRF](https://github.com/google-research/google-research/blob/master/jaxnerf/nerf/datasets.py).
 
 ## Training Pipeline
 
