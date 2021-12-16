@@ -2,11 +2,9 @@ from dataclasses import dataclass
 from functools import partial
 
 import jax
-import optax
 import tqdm
 import numpy as onp
 import jax.numpy as jnp
-import jax.experimental.optimizers as opt
 
 from dataset_util import iterbatches, process_dataset, train_test_split
 from model import GPT, GPTConfig
