@@ -1,5 +1,6 @@
 import pickle
 from dataclasses import dataclass
+from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -35,12 +36,12 @@ def init_adam(tconf):
         v_hat = var / (1.0 - tconf.b2 ** i)
         param = param - tconf.lr * m_hat / (jnp.sqrt(v_hat) + tconf.eps)
 
-        return param, (mu, var)
+        return param, mu, var
 
     def init_opt_state(model):
-        init_stats = lambda p: (jnp.zeros_like(p), jnp.zeros_like(p))
-        stats = jax.tree_map(init_stats, model)
-        return stats, 1
+        mu = jax.tree_map(lambda p: jnp.zeros_like(p), model)
+        var = jax.tree_map(lambda p: jnp.zeros_like(p), model)
+        return mu, var, 1
 
     return adam, init_opt_state
 
@@ -53,27 +54,23 @@ def cross_entropy(model, x, y):
 
 
 def train(model, train_dl, tconf):
-    adam, init_opt_state = init_adam(tconf)
+    adam_i, init_opt_state = init_adam(tconf)
     opt_state = init_opt_state(model)
 
     @jax.jit
     def step(model, xb, yb, opt_state):
         loss, grads = jax.value_and_grad(cross_entropy)(model, xb, yb)
 
+        mu, var, idx = opt_state
+        adam = partial(adam_i, i=idx)
+        opt_tree = jax.tree_map(adam, model, grads, mu, var)
+
         is_tuple = lambda x: isinstance(x, tuple)
-        stats, opt_treedef = jax.tree_flatten(opt_state[0], is_leaf=is_tuple)
-        idx = opt_state[1]
+        model = jax.tree_map(lambda t: t[0], opt_tree, is_leaf=is_tuple)
+        mu = jax.tree_map(lambda t: t[1], opt_tree, is_leaf=is_tuple)
+        var = jax.tree_map(lambda t: t[2], opt_tree, is_leaf=is_tuple)
 
-        params, md_treedef = jax.tree_flatten(model)
-        grads, _ = jax.tree_flatten(grads)
-
-        leaves = [adam(p, g, *s, i=idx) for (p, g, s) in zip(params, grads, stats)]
-        params, stats = zip(*leaves)
-
-        model = md_treedef.unflatten(params)
-        opt_state = (opt_treedef.unflatten(stats), idx + 1)
-
-        return loss, model, opt_state
+        return loss, model, (mu, var, idx + 1)
 
     pbar = tqdm.trange(tconf.max_epoch)
     for epoch in pbar:
