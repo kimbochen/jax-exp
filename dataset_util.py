@@ -9,17 +9,13 @@ import numpy as np
 
 class Dataloader:
     def __init__(self, train_ds, batch_size):
-        self.iterbatch = iterbatches(train_ds, batch_size=batch_size)
+        self.ds = train_ds
+        self.iterbatch = partial(iterbatches, batch_size=batch_size)
 
     def __iter__(self):
-        for (batch,) in self.iterbatch:
+        for (batch,) in self.iterbatch(self.ds):
             xb, yb = batch[:, :-1], batch[:, 1:]
             yield xb, yb
-
-    def __next__(self):
-        (batch,) = next(self.iterbatch)
-        xb, yb = batch[:, :-1], batch[:, 1:]
-        return xb, yb
 
 
 class Codebook(object):
