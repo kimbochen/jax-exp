@@ -88,7 +88,7 @@ def train(model, train_dl, tconf):
 
 
 def main():
-    tconf = TrainerConfig(max_epoch=120, batch_size=256, lr=3e-3)
+    tconf = TrainerConfig(max_epoch=30, batch_size=256, lr=3e-3)
     text, codebook = process_dataset('data/input.txt', print_stats=False)
 
     mconf = GPTConfig(
