@@ -105,7 +105,7 @@ def main():
         n_head=8, d_embd=256, n_layer=8,
         block_size=128, n_vocab=codebook.size
     )
-    model, _ = GPT(mconf).init(39)
+    model = GPT(mconf).init(jax.random.PRNGKey(39))
     train_batch, _ = train_test_split(codebook, text, mconf.block_size)
 
     tconf = TrainerConfig(max_epoch=500, batch_size=512, lr=1e-3)

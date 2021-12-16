@@ -13,24 +13,26 @@ class Module:
     def __init_subclass__(cls):
         register_pytree_node_class(cls)
 
-    def init(self, key):
-        is_model = isinstance(key, int)
-        key = rand.PRNGKey(key) if is_model else key
-        self.static_name = []
-        self.leaf_name = []
+    def init(self, seed):
+        is_leaf = lambda x: isinstance(x, (Module, ModuleList, Parameter))
+        _leaf_names, _static_names = [], []
 
         for name, value in self.__dict__.items():
-            if isinstance(value, Parameter):
-                obj, key = value.init(key)
-                object.__setattr__(self, name, obj)
-                self.leaf_name.append(name)
-            elif isinstance(value, (Module, ModuleList)):
-                key = value.init(key)
-                self.leaf_name.append(name)
+            (obj, *_), _ = jax.tree_flatten(value, is_leaf=is_leaf)
+            if is_leaf(obj):
+                _leaf_names.append(name)
             else:
-                self.static_name.append(name)
+                _static_names.append(name)
 
-        return (self, key) if is_model else key
+        keys = rand.split(seed, len(_leaf_names))
+        for name, key in zip(_leaf_names, keys):
+            value = self.__dict__[name]
+            object.__setattr__(self, name, value.init(key))
+
+        self.leaf_name = _leaf_names
+        self.static_name = _static_names
+
+        return self
 
     def tree_flatten(self):
         static_field = [self.__dict__[name] for name in self.static_name]
@@ -59,18 +61,19 @@ class ModuleList:
         for mod in self.modules:
             yield mod
 
-    def init(self, key):
+    def init(self, seed):
+        keys = rand.split(seed, len(self.modules))
         self.activation_idx = []
 
-        for idx, module in enumerate(self.modules):
+        for idx, (module, key) in enumerate(zip(self.modules, keys)):
             if isinstance(module, Module):
-                key = module.init(key)
+                module.init(key)
             elif isinstance(module, Callable):
                 self.activation_idx.append(idx)
             else:
                 raise ValueError(f'Unexpected data type {type(module)} in ModuleList.')
 
-        return key
+        return self
 
     def tree_flatten(self):
         static_field = [self.modules[idx] for idx in self.activation_idx]
@@ -98,8 +101,7 @@ class Param(Parameter):
     data: jnp.ndarray
 
     def init(self, key):
-        key, _ = rand.split(key)
-        return self.data, key
+        return self.data
 
 @dataclass
 class RandParam(Parameter):
@@ -108,5 +110,4 @@ class RandParam(Parameter):
 
     def init(self, key):
         data = self.method(key, self.shape)
-        key, _ = rand.split(key)
-        return data, key
+        return data
