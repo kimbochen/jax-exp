@@ -23,7 +23,8 @@ class GPTConfig:
 class Sequential(Module):
     def __init__(self, *layers):
         super().__init__()
-        self.layers = ModuleList(layers)
+        self.layers = list(layers)
+        self.init()
 
     def __call__(self, x):
         for layer in self.layers:
@@ -35,6 +36,7 @@ class Linear(Module):
         super().__init__()
         self.weight = RandParam([d_in, d_out])
         self.bias = Param(jnp.zeros([d_out, ]))
+        self.init()
 
     def __call__(self, x):
         y = x @ self.weight + self.bias
@@ -44,6 +46,7 @@ class Embedding(Module):
     def __init__(self, n_embd, d_embd):
         super().__init__()
         self.embd = RandParam([n_embd, d_embd])
+        self.init()
 
     def __call__(self, x):
         x = self.embd[x, :]
@@ -55,6 +58,7 @@ class LayerNorm(Module):
         self.gamma = Param(jnp.ones(norm_shape, 'f'))
         self.beta = Param(jnp.zeros(norm_shape, 'f'))
         self.eps = 1e-5
+        self.init()
 
     def __call__(self, x):
         u = jnp.mean(x, axis=-1, keepdims=True)
@@ -69,6 +73,7 @@ class Dropout(Module):
     def __init__(self, keep):
         super().__init__()
         self.keep = keep
+        self.init()
 
     def __call__(self, x):
         return x
@@ -91,6 +96,7 @@ class CausalSelfAttention(Module):
 
         self.project = Linear(cfg.d_embd, cfg.d_embd)
         self.n_head = cfg.n_head
+        self.init()
 
     def __call__(self, x):
         B, T, C = x.shape
@@ -113,6 +119,12 @@ class CausalSelfAttention(Module):
 
         return y
 
+class GeLU(Module):
+    def __init__(self):
+        self.init()
+    def __call__(self, x):
+        return jax.nn.gelu(x)
+
 class Block(Module):
     def __init__(self, cfg):
         super().__init__()
@@ -123,10 +135,11 @@ class Block(Module):
 
         self.mlp = Sequential(
             Linear(cfg.d_embd, 4 * cfg.d_embd),
-            jax.nn.gelu,
+            GeLU(),
             Linear(4 * cfg.d_embd, cfg.d_embd),
             Dropout(cfg.res_pdrop)
         )
+        self.init()
 
     def __call__(self, x):
         x = x + self.attn(self.pre_ln(x))
@@ -146,6 +159,7 @@ class GPT(Module):
         self.head = Linear(cfg.d_embd, cfg.n_vocab)
 
         self.block_size = cfg.block_size
+        self.init()
 
     def __call__(self, idx):
         T = idx.shape[-1]

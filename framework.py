@@ -13,26 +13,17 @@ class Module:
     def __init_subclass__(cls):
         register_pytree_node_class(cls)
 
-    def init(self, seed):
-        is_leaf = lambda x: isinstance(x, (Module, ModuleList, Parameter))
+    def init(self):
+        is_leaf = lambda x: isinstance(x, (Module, Parameter))
         _leaf_names, _static_names = [], []
-
         for name, value in self.__dict__.items():
             (obj, *_), _ = jax.tree_flatten(value, is_leaf=is_leaf)
             if is_leaf(obj):
                 _leaf_names.append(name)
             else:
                 _static_names.append(name)
-
-        keys = rand.split(seed, len(_leaf_names))
-        for name, key in zip(_leaf_names, keys):
-            value = self.__dict__[name]
-            object.__setattr__(self, name, value.init(key))
-
         self.leaf_name = _leaf_names
         self.static_name = _static_names
-
-        return self
 
     def tree_flatten(self):
         static_field = [self.__dict__[name] for name in self.static_name]

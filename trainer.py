@@ -5,6 +5,7 @@ import jax
 import tqdm
 import numpy as onp
 import jax.numpy as jnp
+import jax.random as rand
 
 from dataset_util import iterbatches, process_dataset, train_test_split
 from model import GPT, GPTConfig
@@ -18,6 +19,13 @@ class TrainerConfig:
     b1: float = 0.9
     b2: float = 0.99
     eps: float = 1e-8
+
+
+def init_model(model, seed):
+    params, treedef = jax.tree_flatten(model)
+    keys = rand.split(rand.PRNGKey(seed), len(params))
+    init_param = lambda p, k: p.init(k)
+    return treedef.unflatten(init_param(*xs) for xs in zip(params, keys))
 
 
 def Adam(tconf):
@@ -105,7 +113,8 @@ def main():
         n_head=8, d_embd=256, n_layer=8,
         block_size=128, n_vocab=codebook.size
     )
-    model = GPT(mconf).init(jax.random.PRNGKey(39))
+    model = GPT(mconf)
+    model = init_model(model, 39)
     train_batch, _ = train_test_split(codebook, text, mconf.block_size)
 
     tconf = TrainerConfig(max_epoch=500, batch_size=512, lr=1e-3)
