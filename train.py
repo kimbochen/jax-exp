@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import jax
 import jax.numpy as jnp
 import jax.random as rand
+import tqdm
 
 from dataset_util import Dataloader, process_dataset, train_test_split
 from model import GPT, GPTConfig
@@ -25,7 +26,7 @@ def init_model(model, seed):
     init_param = lambda p, k: p.init(k)
     return treedef.unflatten(init_param(*xs) for xs in zip(params, keys))
 
-def adam_init(tconf):
+def init_adam(tconf):
     def adam(param, grad, mu, var, i):
         mu = (1.0 - tconf.b1) * grad + tconf.b1 * mu
         var = (1.0 - tconf.b2) * jnp.square(grad) + tconf.b2 * var
@@ -52,7 +53,7 @@ def cross_entropy(model, x, y):
 
 
 def train(model, train_dl, tconf):
-    adam, init_opt_state = adam_init(tconf)
+    adam, init_opt_state = init_adam(tconf)
     opt_state = init_opt_state(model)
 
     @jax.jit
@@ -74,15 +75,20 @@ def train(model, train_dl, tconf):
 
         return loss, model, opt_state
 
-    xb, yb = next(train_dl)
-    loss, model, opt_state = step(model, xb, yb, opt_state)
-    print(loss)
+    pbar = tqdm.trange(tconf.max_epoch)
+    for epoch in pbar:
+        losses = []
+        for xb, yb in train_dl:
+            loss, model, opt_state = step(model, xb, yb, opt_state)
+            losses.append(loss)
+        loss = jnp.asarray(losses).mean()
+        pbar.set_description(f'Epoch {epoch} loss: {loss:.4f}')
 
     return model
 
 
 def main():
-    tconf = TrainerConfig(max_epoch=500, batch_size=512, lr=1e-3)
+    tconf = TrainerConfig(max_epoch=120, batch_size=256, lr=3e-3)
     text, codebook = process_dataset('data/input.txt', print_stats=False)
 
     mconf = GPTConfig(
@@ -96,8 +102,8 @@ def main():
 
     model = train(model, train_dl, tconf)
 
-    # with open('ckpt_model.pkl', 'wb') as pkl_file:
-    #     pickle.dump(model, pkl_file)
+    with open('ckpt_model.pkl', 'wb') as pkl_file:
+        pickle.dump(model, pkl_file)
 
 if __name__ == '__main__':
     main()
