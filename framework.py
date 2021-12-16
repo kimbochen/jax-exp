@@ -17,13 +17,16 @@ class Module:
         is_model = isinstance(key, int)
         key = rand.PRNGKey(key) if is_model else key
         self.static_name = []
+        self.leaf_name = []
 
         for name, value in self.__dict__.items():
             if isinstance(value, Parameter):
                 obj, key = value.init(key)
                 object.__setattr__(self, name, obj)
+                self.leaf_name.append(name)
             elif isinstance(value, (Module, ModuleList)):
                 key = value.init(key)
+                self.leaf_name.append(name)
             else:
                 self.static_name.append(name)
 
@@ -31,19 +34,17 @@ class Module:
 
     def tree_flatten(self):
         static_field = [self.__dict__[name] for name in self.static_name]
-        is_dyn = lambda name: name not in self.static_name
-        dynamic_name = list(filter(is_dyn, self.__dict__.keys()))
-        dynamic_field = [self.__dict__[name] for name in dynamic_name]
-        return dynamic_field, (static_field, self.static_name, dynamic_name)
+        dynamic_field = [self.__dict__[name] for name in self.leaf_name]
+        return dynamic_field, (static_field, self.static_name, self.leaf_name)
 
     @classmethod
     def tree_unflatten(cls, aux, dynamic_field):
         obj = cls.__new__(cls)
-        static_field, obj.static_name, dynamic_name = aux
+        static_field, obj.static_name, obj.leaf_name = aux
 
         for name, value in zip(obj.static_name, static_field):
             object.__setattr__(obj, name, value)
-        for name, value in zip(dynamic_name, dynamic_field):
+        for name, value in zip(obj.leaf_name, dynamic_field):
             object.__setattr__(obj, name, value)
 
         return obj
