@@ -1,9 +1,22 @@
-import re
-import joblib
-# from tabulate import tabulate
-import numpy as np
-import io
 import collections
+import io
+import re
+from functools import partial
+
+import joblib
+import numpy as np
+
+
+class Dataloader:
+    def __init__(self, train_ds, batch_size):
+        self.ds = train_ds
+        self.iterbatch = partial(iterbatches, batch_size=batch_size)
+
+    def __iter__(self):
+        for (batch,) in self.iterbatch(self.ds):
+            xb, yb = batch[:, :-1], batch[:, 1:]
+            yield xb, yb
+
 
 class Codebook(object):
     def __init__(self, tokens):
@@ -59,7 +72,7 @@ def process_dataset(text_file, print_stats=True):
         ]))
     return text, codebook
 
-def iterbatches(*arrays, num_batches=None, batch_size=None, shuffle=True, include_final_partial_batch=True):
+def iterbatches(*arrays, num_batches=None, batch_size=None, shuffle=False, include_final_partial_batch=False):
     assert (num_batches is None) != (batch_size is None), 'Provide num_batches or batch_size, but not both'
     arrays = tuple(map(np.asarray, arrays))
     n = arrays[0].shape[0]
