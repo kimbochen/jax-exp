@@ -6,9 +6,9 @@ written in JAX.
 
 ## Setup and Usage
 
-Replicate the virtual environment using Conda:
+Replicate the virtual environment using pip:
 ```bash
-conda env create -f environment.yml
+pip install -r requirements.txt
 ```
 
 To train the model:
