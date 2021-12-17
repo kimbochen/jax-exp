@@ -20,15 +20,18 @@ def evaluate(model, ctx, block_size, codebook):
     print(response)
 
 
-def main():
-    _, codebook = process_dataset('data/input.txt', print_stats=False)
-
+def main(args):
     with open('ckpt_model.pkl', 'rb') as f:
         model = pickle.load(f)
-
-    prompt = 'Alice stopped'
-    evaluate(model, prompt, model.block_size, codebook)
+    _, codebook = process_dataset('data/input.txt', print_stats=False)
+    evaluate(model, args.prompt, model.block_size, codebook)
 
 
 if __name__ == '__main__':
-    main()
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+    parser.add_argument('--prompt', type=str, default="O'Lord have mercy")
+    args = parser.parse_args()
+
+    main(args)
