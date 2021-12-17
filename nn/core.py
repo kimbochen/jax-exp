@@ -62,7 +62,6 @@ class ModuleList:
             yield module
 
     def init(self, seed):
-        self.activation_idx = []
         keys = rand.split(seed, len(self.modules))
         for module, key in zip(self.modules, keys):
             module.init(key)
@@ -74,7 +73,7 @@ class ModuleList:
     @classmethod
     def tree_unflatten(cls, treedef, leaves):
         obj = cls.__new__(cls)
-        static_fields, obj.activation_idx = [], []
+        static_fields = []
         obj.modules = [
             mod for idx, (act, mod) in enumerate(zip(static_fields, leaves))
         ]
