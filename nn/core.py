@@ -19,8 +19,7 @@ class Module:
         _leaf_names, _static_names = [], []
 
         for name, value in self.__dict__.items():
-            (obj, *_), _ = jax.tree_flatten(value, is_leaf=is_leaf)
-            if is_leaf(obj):
+            if is_leaf(value):
                 _leaf_names.append(name)
             else:
                 _static_names.append(name)

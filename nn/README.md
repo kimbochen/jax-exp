@@ -74,11 +74,8 @@ If an attribute is of type `Module` or a trainable parameter, we put its name in
 Otherwise, we put its name into the list of static names.
 
 However, attributes are sometimes nested, e.g. a list of Transformer blocks.
-Therefore, we need to break down the attribute object into a list of objects.
-I implemented this with `jax.tree_flatten`,
-assuming the list would contain elements of the same data type.
-`jax.tree_flatten` breaks down PyTrees recursively, so we specify `is_leaf`,
-telling the function to treat `Modules` and trainable parameter types as end leaves and stop.
+We tackle this problem by creating a specific class, `ModuleList`, which takes care of initializing each
+module in the list.
 
 ## Initializing Random Parameters
 
@@ -97,11 +94,21 @@ Specifically, `Parameter` records 2 arguments:
 
 ### Initializing the parameters
 
-Once a neural network is instantiated, we call `jax.treeflatten` to flatten_ the neural network.
-By the design of the `Module` class, tree leaves would only contain `Parameter` objects.  
-Given the list of _n_ `Parameter` objects, we can split a master key into _n_ subkeys with `jax.random.split`.
-We can then pair up each `Parameter` object with one subkey to initialize an array.  
-Finally, we reconstruct (unflatten) the neural network using `treedef` and the list of arrays.
+Only leaf nodes, i.e. `Modules` and `Parameters` objects, need initialization.  
+Thus, in a module, we can split a seed random state into `len(self.leaf_names)` keys.  
+We then recursively call the `init` method for each leaf, completing the initialization.
+
+## `ModuleList`
+
+To be honest, we do not need a special class to create a specific way of initializing modules.  
+Unfortunately, the other solution, while elegant, slows down the program 10x.  
+I failed to find what is slowing down the program, but
+[here's a mysterious thing](https://github.com/kimbochen/jax-exp/blob/0853080b3a3d8bd68e759fc604c11a585cb64dd0/nn/core.py#L75)
+```python
+cls([leaf for _, leaf in zip([], leaves)])
+```
+The list comprehension is totally redundant, but if you replace that line with `cls(leaves)`,
+it slows down 10x.
 
 ## Stochastic Modules
 
