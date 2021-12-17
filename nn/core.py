@@ -24,73 +24,65 @@ class Module:
                 _leaf_names.append(name)
             else:
                 _static_names.append(name)
+        self.leaf_names = _leaf_names
+        self.static_names = _static_names
 
-        keys = rand.split(seed, len(_leaf_names))
-        for name, key in zip(_leaf_names, keys):
+        keys = rand.split(seed, len(self.leaf_names))
+        for name, key in zip(self.leaf_names, keys):
             value = self.__dict__[name]
             object.__setattr__(self, name, value.init(key))
-
-        self.leaf_name = _leaf_names
-        self.static_name = _static_names
 
         return self
 
     def tree_flatten(self):
-        static_field = [self.__dict__[name] for name in self.static_name]
-        dynamic_field = [self.__dict__[name] for name in self.leaf_name]
-        return dynamic_field, (static_field, self.static_name, self.leaf_name)
+        static_fields = [self.__dict__[name] for name in self.static_names]
+        leaves = [self.__dict__[name] for name in self.leaf_names]
+        return leaves, (static_fields, self.static_names, self.leaf_names)
 
     @classmethod
-    def tree_unflatten(cls, aux, dynamic_field):
+    def tree_unflatten(cls, treedef, leaves):
         obj = cls.__new__(cls)
-        static_field, obj.static_name, obj.leaf_name = aux
+        static_fields, obj.static_names, obj.leaf_names = treedef
 
-        for name, value in zip(obj.static_name, static_field):
+        for name, value in zip(obj.static_names, static_fields):
             object.__setattr__(obj, name, value)
-        for name, value in zip(obj.leaf_name, dynamic_field):
+        for name, value in zip(obj.leaf_names, leaves):
             object.__setattr__(obj, name, value)
 
         return obj
 
 
 @register_pytree_node_class
-@dataclass
 class ModuleList:
-    modules: List[Module]
+    def __init__(self, modules):
+        self.modules = modules
 
     def __iter__(self):
-        for mod in self.modules:
-            yield mod
+        for module in self.modules:
+            yield module
 
     def init(self, seed):
-        keys = rand.split(seed, len(self.modules))
         self.activation_idx = []
-
-        for idx, (module, key) in enumerate(zip(self.modules, keys)):
-            if isinstance(module, Module):
-                module.init(key)
-            elif isinstance(module, Callable):
-                self.activation_idx.append(idx)
-            else:
-                raise ValueError(f'Unexpected data type {type(module)} in ModuleList.')
-
+        keys = rand.split(seed, len(self.modules))
+        for module, key in zip(self.modules, keys):
+            module.init(key)
         return self
 
     def tree_flatten(self):
-        static_field = [self.modules[idx] for idx in self.activation_idx]
-        dynamic_field = [
+        static_fields = [self.modules[idx] for idx in self.activation_idx]
+        leaves = [
             module for idx, module in enumerate(self.modules)
             if idx not in self.activation_idx
         ]
-        return dynamic_field, (static_field, self.activation_idx)
+        return leaves, (static_fields, self.activation_idx)
 
     @classmethod
-    def tree_unflatten(cls, aux, dynamic_field):
+    def tree_unflatten(cls, treedef, leaves):
         obj = cls.__new__(cls)
-        static_field, obj.activation_idx = aux
+        static_fields, obj.activation_idx = treedef
         obj.modules = [
             act if idx in obj.activation_idx else mod
-            for idx, (act, mod) in enumerate(zip(static_field, dynamic_field))
+            for idx, (act, mod) in enumerate(zip(static_fields, leaves))
         ]
         return obj
 
