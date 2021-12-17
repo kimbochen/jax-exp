@@ -69,12 +69,12 @@ class ModuleList:
         return self
 
     def tree_flatten(self):
-        return self.modules, ([], self.activation_idx)
+        return self.modules, ()
 
     @classmethod
     def tree_unflatten(cls, treedef, leaves):
         obj = cls.__new__(cls)
-        static_fields, obj.activation_idx = treedef
+        static_fields, obj.activation_idx = [], []
         obj.modules = [
             mod for idx, (act, mod) in enumerate(zip(static_fields, leaves))
         ]
