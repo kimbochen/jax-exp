@@ -7,7 +7,7 @@ from .core import Module, ModuleList, Parameter
 class Sequential(Module):
     def __init__(self, *layers):
         super().__init__()
-        self.layers = ModuleList(*layers)
+        self.layers = ModuleList(layers)
 
     def __call__(self, x):
         for layer in self.layers:

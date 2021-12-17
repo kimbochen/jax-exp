@@ -1,5 +1,7 @@
 import typing as tp
+from abc import ABC
 from dataclasses import dataclass
+from typing import Callable, List
 
 import jax
 import jax.numpy as jnp
@@ -13,7 +15,7 @@ class Module:
         register_pytree_node_class(cls)
 
     def init(self, seed):
-        is_leaf = lambda x: isinstance(x, (Module, Parameter))
+        is_leaf = lambda x: isinstance(x, (Module, ModuleList, Parameter))
         _leaf_names, _static_names = [], []
 
         for name, value in self.__dict__.items():
@@ -22,64 +24,75 @@ class Module:
                 _leaf_names.append(name)
             else:
                 _static_names.append(name)
-        self._leaf_names = _leaf_names
-        self._static_names = _static_names
 
-        keys = rand.split(seed, len(self.leaf_names))
-        for name, key in zip(self.leaf_names, keys):
+        keys = rand.split(seed, len(_leaf_names))
+        for name, key in zip(_leaf_names, keys):
             value = self.__dict__[name]
             object.__setattr__(self, name, value.init(key))
 
+        self.leaf_name = _leaf_names
+        self.static_name = _static_names
+
         return self
 
     def tree_flatten(self):
-        leaves = [self.__dict__[name] for name in self.leaf_names]
-        static_fields = [self.__dict__[name] for name in self.static_names]
-        return leaves, [self.leaf_names, self.static_names, static_fields]
+        static_field = [self.__dict__[name] for name in self.static_name]
+        dynamic_field = [self.__dict__[name] for name in self.leaf_name]
+        return dynamic_field, (static_field, self.static_name, self.leaf_name)
 
     @classmethod
-    def tree_unflatten(cls, treedef, leaves):
+    def tree_unflatten(cls, aux, dynamic_field):
         obj = cls.__new__(cls)
-        obj._leaf_names, obj._static_names, static_fields = treedef
+        static_field, obj.static_name, obj.leaf_name = aux
 
-        def set_obj_attrs(names, values):
-            for name, value in zip(names, values):
-                object.__setattr__(obj, name, value)
-        set_obj_attrs(obj.leaf_names, leaves)
-        set_obj_attrs(obj.static_names, static_fields)
+        for name, value in zip(obj.static_name, static_field):
+            object.__setattr__(obj, name, value)
+        for name, value in zip(obj.leaf_name, dynamic_field):
+            object.__setattr__(obj, name, value)
 
         return obj
 
-    @property
-    def leaf_names(self):
-        return self._leaf_names
-
-    @property
-    def static_names(self):
-        return self._static_names
-
 
 @register_pytree_node_class
+@dataclass
 class ModuleList:
-    def __init__(self, *modules):
-        self.modules = list(modules)
+    modules: List[Module]
 
     def __iter__(self):
-        for module in self.modules:
-            yield module
+        for mod in self.modules:
+            yield mod
 
     def init(self, seed):
         keys = rand.split(seed, len(self.modules))
-        for module, key in zip(self.modules, keys):
-            module.init(key)
+        self.activation_idx = []
+
+        for idx, (module, key) in enumerate(zip(self.modules, keys)):
+            if isinstance(module, Module):
+                module.init(key)
+            elif isinstance(module, Callable):
+                self.activation_idx.append(idx)
+            else:
+                raise ValueError(f'Unexpected data type {type(module)} in ModuleList.')
+
         return self
 
     def tree_flatten(self):
-        return self.modules, []
+        static_field = [self.modules[idx] for idx in self.activation_idx]
+        dynamic_field = [
+            module for idx, module in enumerate(self.modules)
+            if idx not in self.activation_idx
+        ]
+        return dynamic_field, (static_field, self.activation_idx)
 
     @classmethod
-    def tree_unflatten(cls, treedef, leaves):
-        return cls(*leaves)
+    def tree_unflatten(cls, aux, dynamic_field):
+        obj = cls.__new__(cls)
+        static_field, obj.activation_idx = aux
+        obj.modules = [
+            act if idx in obj.activation_idx else mod
+            for idx, (act, mod) in enumerate(zip(static_field, dynamic_field))
+        ]
+        return obj
 
 
 @dataclass
