@@ -37,7 +37,12 @@ def init_adam(tconf):
         var = jax.tree_map(lambda p: jnp.zeros_like(p), model)
         return mu, var, 1
 
-    return adam, init_opt_state
+    def split_tree(opt_tree, idx):
+        is_tuple = lambda x: isinstance(x, tuple)
+        tree = jax.tree_map(lambda t: t[idx], opt_tree, is_leaf=is_tuple)
+        return tree
+
+    return adam, init_opt_state, split_tree
 
 def cross_entropy(model, x, y):
     logit = model(x)
@@ -46,9 +51,8 @@ def cross_entropy(model, x, y):
     loss = logprob[jnp.arange(logprob.shape[0]), y.reshape([-1, ])].mean()
     return loss
 
-
 def train(model, train_dl, tconf):
-    adam_i, init_opt_state = init_adam(tconf)
+    adam_i, init_opt_state, split_tree = init_adam(tconf)
     opt_state = init_opt_state(model)
 
     @jax.jit
@@ -58,11 +62,7 @@ def train(model, train_dl, tconf):
         mu, var, idx = opt_state
         adam = partial(adam_i, i=idx)
         opt_tree = jax.tree_map(adam, model, grads, mu, var)
-
-        is_tuple = lambda x: isinstance(x, tuple)
-        model = jax.tree_map(lambda t: t[0], opt_tree, is_leaf=is_tuple)
-        mu = jax.tree_map(lambda t: t[1], opt_tree, is_leaf=is_tuple)
-        var = jax.tree_map(lambda t: t[2], opt_tree, is_leaf=is_tuple)
+        model, mu, var = (split_tree(opt_tree, i) for i in range(3))
 
         return loss, model, (mu, var, idx + 1)
 
@@ -79,7 +79,7 @@ def train(model, train_dl, tconf):
 
 
 def main():
-    tconf = TrainerConfig(max_epoch=30, batch_size=256, lr=3e-3)
+    tconf = TrainerConfig(max_epoch=1000, batch_size=512, lr=3e-4)
     text, codebook = process_dataset('data/input.txt', print_stats=False)
 
     mconf = GPTConfig(
