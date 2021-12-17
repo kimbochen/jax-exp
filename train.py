@@ -21,12 +21,6 @@ class TrainerConfig:
     eps: float = 1e-8
 
 
-def init_model(model, seed):
-    params, treedef = jax.tree_flatten(model)
-    keys = rand.split(rand.PRNGKey(seed), len(params))
-    init_param = lambda p, k: p.init(k)
-    return treedef.unflatten(init_param(*xs) for xs in zip(params, keys))
-
 def init_adam(tconf):
     def adam(param, grad, mu, var, i):
         mu = (1.0 - tconf.b1) * grad + tconf.b1 * mu
@@ -92,7 +86,7 @@ def main():
         n_head=8, d_embd=256, n_layer=8,
         block_size=128, n_vocab=codebook.size
     )
-    model = init_model(GPT(mconf), 39)
+    model = GPT(mconf).init(rand.PRNGKey(39))
 
     train_ds, _ = train_test_split(codebook, text, mconf.block_size)
     train_dl = Dataloader(train_ds, tconf.batch_size)
