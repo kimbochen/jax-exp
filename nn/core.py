@@ -69,11 +69,8 @@ class ModuleList:
         return self
 
     def tree_flatten(self):
-        static_fields = [self.modules[idx] for idx in self.activation_idx]
-        leaves = [
-            module for idx, module in enumerate(self.modules)
-            if idx not in self.activation_idx
-        ]
+        static_fields = []
+        leaves = self.modules
         return leaves, (static_fields, self.activation_idx)
 
     @classmethod
