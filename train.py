@@ -51,6 +51,7 @@ def cross_entropy(model, x, y):
     loss = logprob[jnp.arange(logprob.shape[0]), y.reshape([-1, ])].mean()
     return loss
 
+
 def train(model, train_dl, tconf):
     adam_i, init_opt_state, split_tree = init_adam(tconf)
     opt_state = init_opt_state(model)
@@ -58,12 +59,10 @@ def train(model, train_dl, tconf):
     @jax.jit
     def step(model, xb, yb, opt_state):
         loss, grads = jax.value_and_grad(cross_entropy)(model, xb, yb)
-
         mu, var, idx = opt_state
         adam = partial(adam_i, i=idx)
         opt_tree = jax.tree_map(adam, model, grads, mu, var)
         model, mu, var = (split_tree(opt_tree, i) for i in range(3))
-
         return loss, model, (mu, var, idx + 1)
 
     pbar = tqdm.trange(tconf.max_epoch)

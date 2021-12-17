@@ -72,22 +72,62 @@ Output:
 - `model`
 - `opt_state`
 
-### `adam_i`
+### Optimizer
+
+We implement a simple Adam optimizer, following a functional programming pattern.
+
+#### `init_adam`
+
+Creates optimizer functions specified by the training configuration.
+
+Function signature: `init_adam(tconf)`
+
+- `tconf`: The training configuration
+
+Returns:
+- `adam`: The adam optimizer.
+- `init_opt_state`: Initialize the optimizer state, including the mean (`mu`) and variance (`var`).
+- `split_tree`: A helper function for splitting the optimizer tree into model and optimizer state.
+
+#### `adam`
 
 Optimizes the model using according to the Adaptive Momentum (Adam) optimizer.
 
-Function signature: `adam_i(param, mu, var, i)`
+Function signature: `adam(param, grad, mu, var, i)`
 
 - `param`: A single parameter of the model.
+- `grad`: A single gradient.
 - `mu`: The running mean of gradients.
 - `var`: The running variance of gradients.
 - `i`: The epoch count.
 
 Usage:
 
-- This function will be wrapped by `partial`, specifying keyword `i` and becoming `adam`.
-- `adam` is used with `jax.tree_map` to update `model`.
+- This function will be wrapped by `partial`, specifying keyword `i`.
+- The wrapped function is then used with `jax.tree_map` to update `model`.
   ```python
-  model = jax.tree_map(adam, model, mu, var)
+  model = jax.tree_map(adam, model, grads, mu, var)
   ```
 - This function will be defined in `train`, eliminating the need to pass `tconf` in the arguments.
+
+#### `init_opt_state`
+
+Initializes the optimizer state according to the model.  
+Specifically, 2 PyTrees and an epoch-counting variable is initialized.
+
+Function signature: `init_opt_state(model)`
+
+- `model`: The model.
+
+#### `split_tree`
+
+Splits an optimizer tree into subtrees.  
+The output of `adam` is the optimizer tree, containing a PyTree with the same structure as the model,
+but **each leaf is a tuple containing a parameter, a running mean, and a running variance**.  
+To make the training pipeline clear, I split the optimizer tree into the model tree, the mean tree (`mu`),
+and the variance tree (`var`).
+
+Function signature: `split_tree(opt_tree, idx)`
+
+- `opt_tree`: The optimizer tree.
+- `idx`: The index of the leaf tuple.
