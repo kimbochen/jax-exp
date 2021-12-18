@@ -1,8 +1,3 @@
-import typing as tp
-from abc import ABC
-from dataclasses import dataclass
-from typing import Callable, List
-
 import jax
 import jax.numpy as jnp
 import jax.random as rand
@@ -14,24 +9,15 @@ class Module:
     def __init_subclass__(cls):
         register_pytree_node_class(cls)
 
-    def init(self, seed):
-        is_leaf = lambda x: isinstance(x, (Module, ModuleList, Parameter))
+    def __init__(self):
         _leaf_names, _static_names = [], []
-
         for name, value in self.__dict__.items():
-            if is_leaf(value):
+            if isinstance(value, (Module, Sequential, Parameter)):
                 _leaf_names.append(name)
             else:
                 _static_names.append(name)
         self.leaf_names = _leaf_names
         self.static_names = _static_names
-
-        keys = rand.split(seed, len(self.leaf_names))
-        for name, key in zip(self.leaf_names, keys):
-            value = self.__dict__[name]
-            object.__setattr__(self, name, value.init(key))
-
-        return self
 
     def tree_flatten(self):
         static_fields = [self.__dict__[name] for name in self.static_names]
@@ -52,38 +38,39 @@ class Module:
 
 
 @register_pytree_node_class
-class ModuleList:
-    def __init__(self, modules):
+class Sequential:
+    def __init__(self, *modules):
         self.modules = modules
-
-    def __iter__(self):
         for module in self.modules:
-            yield module
+            assert isinstance(module, Module)
 
-    def init(self, seed):
-        keys = rand.split(seed, len(self.modules))
-        for module, key in zip(self.modules, keys):
-            module.init(key)
-        return self
+    def __call__(self, x):
+        for module in self.modules:
+            x = module(x)
+        return x
+
+    def __repr__(self):
+        module_reprs = '\n'.join([repr(m) for m in self.modules])
+        return f'Sequential(\n{module_reprs}\n)'
 
     def tree_flatten(self):
         return self.modules, ()
 
     @classmethod
     def tree_unflatten(cls, treedef, leaves):
-        return cls([leaf for _, leaf in zip([], leaves)])
+        return cls(*leaves)
 
 
-@dataclass
 class Parameter:
-    shape: tp.List[int]
-    method: tp.Optional[tp.Callable] = None
+    def __init__(self, shape, method=None):
+        self.shape = shape
+        self.method = method
 
-    def __repr__(self):
-        return f'Parameter(shape={self.shape})'
-
-    def init(self, key):
+    def __call__(self, key):
         if self.method is None:
             return rand.normal(key, self.shape)
         else:
-            return self.method(self.shape, dtype=jnp.float32)
+            return self.method(self.shape)
+
+    def __repr__(self):
+        return f'Parameter(shape={self.shape})'

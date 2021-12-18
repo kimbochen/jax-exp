@@ -21,6 +21,11 @@ class TrainerConfig:
     eps: float = 1e-8
 
 
+def init_model(model, seed):
+    params, treedef = jax.tree_flatten(model)
+    keys = rand.split(seed, len(params))
+    return treedef.unflatten(p(k) for p, k in zip(params, keys))
+
 def init_adam(tconf):
     def adam(param, grad, mu, var, i):
         mu = (1.0 - tconf.b1) * grad + tconf.b1 * mu
@@ -76,20 +81,17 @@ def train(model, train_dl, tconf):
 
     return model
 
-
 def main():
-    tconf = TrainerConfig(max_epoch=1000, batch_size=512, lr=3e-4)
+    tconf = TrainerConfig(max_epoch=350, batch_size=256, lr=3e-3)
     text, codebook = process_dataset('data/input.txt', print_stats=False)
-
     mconf = GPTConfig(
-        n_head=8, d_embd=256, n_layer=8,
-        block_size=128, n_vocab=codebook.size
+        d_embd=256, n_head=8, n_layer=8, block_size=128,
+        n_vocab=codebook.size
     )
-    model = GPT(mconf).init(rand.PRNGKey(39))
-
     train_ds, _ = train_test_split(codebook, text, mconf.block_size)
-    train_dl = Dataloader(train_ds, tconf.batch_size)
 
+    train_dl = Dataloader(train_ds, tconf.batch_size)
+    model = init_model(GPT(mconf), rand.PRNGKey(39))
     model = train(model, train_dl, tconf)
 
     with open('ckpt_model.pkl', 'wb') as pkl_file:

@@ -20,12 +20,9 @@ class GPTConfig:
     attn_pdrop: float = 0.1
 
 
-# Transformer Blocks
-
 class CausalSelfAttention(nn.Module):
     def __init__(self, cfg):
         assert cfg.d_embd % cfg.n_head == 0
-        super().__init__()
 
         self.query = nn.Linear(cfg.d_embd, cfg.d_embd)
         self.key = nn.Linear(cfg.d_embd, cfg.d_embd)
@@ -39,6 +36,8 @@ class CausalSelfAttention(nn.Module):
 
         self.project = nn.Linear(cfg.d_embd, cfg.d_embd)
         self.n_head = cfg.n_head
+
+        super().__init__()
 
     def __call__(self, x):
         B, T, C = x.shape
@@ -61,10 +60,9 @@ class CausalSelfAttention(nn.Module):
 
         return y
 
+
 class Block(nn.Module):
     def __init__(self, cfg):
-        super().__init__()
-
         self.pre_ln = nn.LayerNorm(cfg.d_embd)
         self.attn = CausalSelfAttention(cfg)
         self.post_ln = nn.LayerNorm(cfg.d_embd)
@@ -76,18 +74,16 @@ class Block(nn.Module):
             nn.Dropout(cfg.res_pdrop)
         )
 
+        super().__init__()
+
     def __call__(self, x):
         x = x + self.attn(self.pre_ln(x))
         x = x + self.mlp(self.post_ln(x))
         return x
 
 
-# Model
-
 class GPT(nn.Module):
     def __init__(self, cfg):
-        super().__init__()
-
         self.tok_embd = nn.Embedding(cfg.n_vocab, cfg.d_embd)
         self.pos_embd = nn.Parameter([1, cfg.block_size, cfg.d_embd], jnp.zeros)
         self.drop = nn.Dropout(cfg.embd_pdrop)
@@ -97,6 +93,8 @@ class GPT(nn.Module):
         self.head = nn.Linear(cfg.d_embd, cfg.n_vocab)
 
         self.block_size = cfg.block_size
+
+        super().__init__()
 
     def __call__(self, idx):
         T = idx.shape[-1]
