@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jax.random as rand
 import tqdm
 
-from dataset_util import Dataloader, process_dataset, train_test_split
+from dataset import CharDataset
 from model import GPT, GPTConfig
 
 
@@ -79,6 +79,7 @@ def train(model, train_dl, tconf):
         for xb, yb in train_dl:
             loss, model, opt_state = step(model, xb, yb, opt_state)
             losses.append(loss)
+        import pdb; pdb.set_trace()
         loss = jnp.asarray(losses).mean()
         pbar.set_description(f'Epoch {epoch} loss: {loss:.4f}')
 
@@ -86,16 +87,15 @@ def train(model, train_dl, tconf):
 
 
 def main():
-    tconf = TrainerConfig(max_epoch=500, batch_size=128, lr=3e-3)
-    text, codebook = process_dataset('data/input.txt', print_stats=False)
+    char_ds = CharDataset('data/input.txt')
     mconf = GPTConfig(
-        d_embd=128, n_head=4, n_layer=4, block_size=64,
-        n_vocab=codebook.size
+        d_embd=128, n_head=4, n_layer=4, block_size=128,
+        n_vocab=char_ds.vocab_size
     )
-    train_ds, _ = train_test_split(codebook, text, mconf.block_size)
+    tconf = TrainerConfig(max_epoch=500, batch_size=128, lr=1e-3)
 
     model = init_layer(GPT(mconf), rand.PRNGKey(39))
-    train_dl = Dataloader(train_ds, tconf.batch_size)
+    train_dl = char_ds.get_dataloader(tconf.batch_size, mconf.block_size)
     model = train(model, train_dl, tconf)
 
     with open('ckpt_model.pkl', 'wb') as file:
