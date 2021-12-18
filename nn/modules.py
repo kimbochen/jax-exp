@@ -15,6 +15,11 @@ class Sequential(Module):
             x = module(x)
         return x
 
+    def __repr__(self):
+        reprs = '\n  '.join([repr(m) for m in self.modules])
+        return f'Sequential(modules= \n  {reprs}\n)'
+
+
 class Linear(Module):
     def __init__(self, d_in, d_out):
         self.weight = Parameter([d_in, d_out])
@@ -25,6 +30,10 @@ class Linear(Module):
         y = x @ self.weight + self.bias
         return y
 
+    def __repr__(self):
+        return f'Linear(weight:{self.weight.shape}, bias:{self.bias.shape})'
+
+
 class Embedding(Module):
     def __init__(self, n_embd, d_embd):
         self.embd = Parameter([n_embd, d_embd])
@@ -33,6 +42,10 @@ class Embedding(Module):
     def __call__(self, x):
         x = self.embd[x, :]
         return x
+
+    def __repr__(self):
+        return f'Embedding(embd:{self.embd.shape})'
+
 
 class LayerNorm(Module):
     def __init__(self, norm_shape):
@@ -50,6 +63,10 @@ class LayerNorm(Module):
 
         return x
 
+    def __repr__(self):
+        return f'LayerNorm(gamma:{self.gamma.shape}, beta:{self.beta.shape})'
+
+
 class Dropout(Module):
     def __init__(self, keep_rate):
         '''
@@ -63,6 +80,13 @@ class Dropout(Module):
         # x = np.where(mask, x / self.p, 0.0)
         return x
 
+    def __repr__(self):
+        return f'Dropout(keep_rate:{self.p})'
+
+
 class GeLU(Module):
     def __call__(self, x):
         return jax.nn.gelu(x)
+
+    def __repr__(self):
+        return 'GeLU'

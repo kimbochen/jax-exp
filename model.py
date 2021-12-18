@@ -60,6 +60,11 @@ class CausalSelfAttention(nn.Module):
 
         return y
 
+    def __repr__(self):
+        qkv = f'Q: {self.query}\n  K: {self.key}\n  V: {self.value}'
+        proj = f'project: {self.project}'
+        return f'CausalSelfAttention(\n  n_head: {self.n_head}\n  {qkv}\n  {proj}\n)'
+
 
 class Block(nn.Module):
     def __init__(self, cfg):
@@ -80,6 +85,11 @@ class Block(nn.Module):
         x = x + self.attn(self.pre_ln(x))
         x = x + self.mlp(self.post_ln(x))
         return x
+
+    def __repr__(self):
+        pre_ln = f'pre_ln: {self.pre_ln}'
+        post_ln = f'post_ln: {self.post_ln}'
+        return f'Block(\n    {pre_ln}\n    {post_ln}\n    attn: CausalSelfAttention\n    mlp: Sequential\n  )'
 
 
 class GPT(nn.Module):
@@ -108,3 +118,15 @@ class GPT(nn.Module):
         logit = self.head(x)  # (T, n_vocab)
 
         return logit
+
+    def __repr__(self):
+        reprs = [
+            f'tok_embd: {self.tok_embd}',
+            f'pos_embd: {self.pos_embd.shape}',
+            f'head: {self.head}',
+            f'norm: {self.norm}',
+            f'block_size: {self.block_size}',
+            f'blocks: [CausalSelfAttention * {len(self.blocks.modules)}]'
+        ]
+        repr_str = '\n  '.join(reprs)
+        return f'GPT(\n  {repr_str}\n)'
