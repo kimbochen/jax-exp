@@ -53,7 +53,7 @@ class Module:
 ### Defining a `Module` PyTree
 
 I chose to make the leaves of a `Module` instance its **trainable parameters**
-because it seems natural to do so and easier to manipulate the PyTree.  
+because it seems natural to do so and doing so makes it easier to manipulate the PyTree.  
 Specifically, the leaves of a PyTree should be JAX arrays.  
 On the other hand, the `treedef` contains:
 - The names of the leaves
@@ -73,9 +73,13 @@ After a module is instantiated, we iterate over its list of attributes (`self.__
 If an attribute is of type `Module` or a trainable parameter, we put its name into the list of leaf names.
 Otherwise, we put its name into the list of static names.
 
-However, attributes are sometimes nested, e.g. a list of Transformer blocks.
-We tackle this problem by creating a specific class, `ModuleList`, which takes care of initializing each
-module in the list.
+Atributes are sometimes containers of `Module` objects, e.g. a list of Transformer blocks.
+Therefore, we need to break down the attribute object and check if its elements are of type `Module`.
+I implemented a `get_elem` function, which breaks down the object using `jax.tree_flatten` and checks
+for the first element.
+`jax.tree_flatten` breaks down PyTrees recursively, so we specify `is_leaf`,
+telling the function to treat `Modules` and trainable parameter types as leaves and stop the recursion.
+Note that we assume containers would only contain one type of elements.
 
 ## Initializing Random Parameters
 
@@ -94,21 +98,11 @@ Specifically, `Parameter` records 2 arguments:
 
 ### Initializing the parameters
 
-Only leaf nodes, i.e. `Modules` and `Parameters` objects, need initialization.  
-Thus, in a module, we can split a seed random state into `len(self.leaf_names)` keys.  
-We then recursively call the `init` method for each leaf, completing the initialization.
-
-## `ModuleList`
-
-To be honest, we do not need a special class to create a specific way of initializing modules.  
-Unfortunately, the other solution, while elegant, slows down the program 10x.  
-I failed to find what is slowing down the program, but
-[here's a mysterious thing](https://github.com/kimbochen/jax-exp/blob/0853080b3a3d8bd68e759fc604c11a585cb64dd0/nn/core.py#L75)
-```python
-cls([leaf for _, leaf in zip([], leaves)])
-```
-The list comprehension is totally redundant, but if you replace that line with `cls(leaves)`,
-it slows down 10x.
+Once a neural network is instantiated, we call `jax.tree_flatten` to _flatten_ the neural network.
+By the design of the `Module` class, tree leaves would only contain `Parameter` objects.
+Given the list of _n_ `Parameter` objects, we can split a master key into _n_ subkeys with `jax.random.split`.
+We then pair up each `Parameter` object with a subkey to initialize an array.
+Finally, we reconstruct (_unflatten_) the neural network using `treedef` and the list of arrays.
 
 ## Stochastic Modules
 

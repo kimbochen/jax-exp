@@ -10,12 +10,16 @@ class Module:
         register_pytree_node_class(cls)
 
     def __init__(self):
+        is_leaf = lambda m: isinstance(m, (Module, Parameter))
+        get_elem = lambda m: jax.tree_flatten(m, is_leaf=is_leaf)[0][0]
+
         _leaf_names, _static_names = [], []
         for name, value in self.__dict__.items():
-            if isinstance(value, (Module, Sequential, Parameter)):
+            if is_leaf(value) or is_leaf(get_elem(value)):
                 _leaf_names.append(name)
             else:
                 _static_names.append(name)
+
         self.leaf_names = _leaf_names
         self.static_names = _static_names
 
@@ -37,30 +41,6 @@ class Module:
         return obj
 
 
-@register_pytree_node_class
-class Sequential:
-    def __init__(self, *modules):
-        self.modules = modules
-        for module in self.modules:
-            assert isinstance(module, Module)
-
-    def __call__(self, x):
-        for module in self.modules:
-            x = module(x)
-        return x
-
-    def __repr__(self):
-        module_reprs = '\n'.join([repr(m) for m in self.modules])
-        return f'Sequential(\n{module_reprs}\n)'
-
-    def tree_flatten(self):
-        return self.modules, ()
-
-    @classmethod
-    def tree_unflatten(cls, treedef, leaves):
-        return cls(*leaves)
-
-
 class Parameter:
     def __init__(self, shape, method=None):
         self.shape = shape
@@ -71,6 +51,3 @@ class Parameter:
             return rand.normal(key, self.shape)
         else:
             return self.method(self.shape)
-
-    def __repr__(self):
-        return f'Parameter(shape={self.shape})'

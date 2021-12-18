@@ -4,6 +4,17 @@ import jax.numpy as jnp
 from .core import Module, Parameter
 
 
+class Sequential(Module):
+    def __init__(self, *modules):
+        assert all([isinstance(m, Module) for m in modules])
+        self.modules = modules
+        super().__init__()
+
+    def __call__(self, x):
+        for module in self.modules:
+            x = module(x)
+        return x
+
 class Linear(Module):
     def __init__(self, d_in, d_out):
         self.weight = Parameter([d_in, d_out])
