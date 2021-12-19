@@ -11,7 +11,7 @@ from model import GPT, GPTConfig
 
 
 @dataclass
-class TrainerConfig:
+class TrainConfig:
     max_epoch: int
     batch_size: int
     lr: float
@@ -24,6 +24,7 @@ def init_layer(layer, seed):
     params, treedef = jax.tree_flatten(layer)
     keys = rand.split(seed, len(params))
     return treedef.unflatten(p(k) for p, k in zip(params, keys))
+
 
 def init_adam(tconf):
     def update_model(model, opt_state):
@@ -88,14 +89,12 @@ def train(model, train_dl, tconf):
 def main():
     char_ds = CharDataset('data/input.txt')
     mconf = GPTConfig(
-        d_embd=128, n_head=4, n_layer=4, block_size=128,
+        d_embd=128, n_head=4, n_layer=4, block_size=64,
         n_vocab=char_ds.vocab_size
     )
-    tconf = TrainerConfig(max_epoch=500, batch_size=256, lr=1e-3)
+    tconf = TrainConfig(max_epoch=1000, batch_size=256, lr=1e-3)
 
-    # model = init_layer(GPT(mconf), rand.PRNGKey(39))
-    with open('ckpt_model.pkl', 'rb') as f:
-        model = pickle.load(f)
+    model = init_layer(GPT(mconf), rand.PRNGKey(39))
     train_dl = char_ds.dataloader(tconf.batch_size, mconf.block_size)
     model = train(model, train_dl, tconf)
 
