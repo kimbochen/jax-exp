@@ -18,7 +18,8 @@ python train.py
 
 To test out the model:
 ```bash
-python evaluate.py --prompt <INPUT_PROMPT>
+python evaluate.py -c <INPUT_PROMPT>
+# -c / --context: The input prompt / the context.
 ```
 
 ## Model
