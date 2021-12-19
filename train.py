@@ -76,10 +76,9 @@ def train(model, train_dl, tconf):
     pbar = tqdm.trange(tconf.max_epoch)
     for epoch in pbar:
         losses = []
-        for xb, yb in train_dl:
+        for xb, yb in train_dl():
             loss, model, opt_state = step(model, xb, yb, opt_state)
             losses.append(loss)
-        import pdb; pdb.set_trace()
         loss = jnp.asarray(losses).mean()
         pbar.set_description(f'Epoch {epoch} loss: {loss:.4f}')
 
