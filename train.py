@@ -91,10 +91,12 @@ def main():
         d_embd=128, n_head=4, n_layer=4, block_size=128,
         n_vocab=char_ds.vocab_size
     )
-    tconf = TrainerConfig(max_epoch=500, batch_size=128, lr=1e-3)
+    tconf = TrainerConfig(max_epoch=500, batch_size=256, lr=1e-3)
 
-    model = init_layer(GPT(mconf), rand.PRNGKey(39))
-    train_dl = char_ds.get_dataloader(tconf.batch_size, mconf.block_size)
+    # model = init_layer(GPT(mconf), rand.PRNGKey(39))
+    with open('ckpt_model.pkl', 'rb') as f:
+        model = pickle.load(f)
+    train_dl = char_ds.dataloader(tconf.batch_size, mconf.block_size)
     model = train(model, train_dl, tconf)
 
     with open('ckpt_model.pkl', 'wb') as file:
