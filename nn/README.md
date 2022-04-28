@@ -148,7 +148,7 @@ class MLP(Module):
         ]
 ```
 By the design of the `Module` class, `self.layers` would be broken down into a list of
-objects with different types, violating our assumption (See [here](#collecting-the-list-of-attribute-names)).  
+objects with different types, violating our assumption (See [here](#collecting-the-lists-of-attribute-names)).  
 Thus, we wrap `jax.nn.relu` in a `Module` class:
 ```python
 class ReLU(Module):
